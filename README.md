@@ -1,29 +1,48 @@
 # Memos
 
 데스크톱에 띄워두는 포스트잇 스타일 할일 메모 앱입니다.  
-macOS용 Electron 앱이며, 터미널 없이 백그라운드처럼 계속 실행할 수 있습니다.
+**macOS · Windows** 지원 | 터미널 없이 바로 실행
+
+---
+
+## ⬇️ 다운로드
+
+### 👉 [**최신 버전 다운로드 (Releases)**](https://github.com/sangmok1/memo-app/releases/latest)
+
+| OS | 파일 | 설치 방법 |
+|----|------|-----------|
+| **Mac** (Apple Silicon) | `Memos-*-mac-arm64.zip` | zip 압축 해제 → `Memos.app`을 Applications로 이동 |
+| **Mac** (Intel) | `Memos-*-mac-x64.zip` | 위와 동일 |
+| **Windows** | `Memos Setup *.exe` | exe 실행 → 설치 마법사 따라하기 |
+
+> 처음 실행 시 OS 보안 경고가 뜰 수 있습니다.  
+> Mac: **시스템 설정 → 개인정보 보호 → 열기** / Windows: **추가 정보 → 실행**
+
+Node.js 없이 **다운로드만으로** 사용할 수 있습니다.
 
 ---
 
 ## 목차
 
-1. [필요한 것](#필요한-것)
-2. [처음 설치하기](#처음-설치하기)
-3. [매일 사용하기 (추천)](#매일-사용하기-추천)
+1. [다운로드](#️-다운로드)
+2. [개발자용 설치 (직접 빌드)](#개발자용-설치-직접-빌드)
+3. [매일 사용하기](#매일-사용하기)
 4. [화면 사용법](#화면-사용법)
 5. [기능 상세](#기능-상세)
 6. [데이터 저장 위치](#데이터-저장-위치)
-7. [개발용 실행](#개발용-실행)
-8. [코드 수정 후 다시 빌드](#코드-수정-후-다시-빌드)
-9. [자주 묻는 것 / 문제 해결](#자주-묻는-것--문제-해결)
+7. [자주 묻는 것 / 문제 해결](#자주-묻는-것--문제-해결)
 
 ---
 
-## 필요한 것
+## 개발자용 설치 (직접 빌드)
 
-- **macOS** (Apple Silicon / Intel)
-- **Node.js** 18 이상 ([nodejs.org](https://nodejs.org)에서 설치)
-- **Git** (저장소 clone 시)
+Node.js와 Git이 있는 경우:
+
+### 필요한 것
+
+- **macOS** 또는 **Windows**
+- **Node.js** 18 이상 ([nodejs.org](https://nodejs.org))
+- **Git**
 
 터미널에서 확인:
 
@@ -35,7 +54,7 @@ git --version
 
 ---
 
-## 처음 설치하기
+## 처음 설치하기 (개발자)
 
 ### 1. 저장소 받기
 
@@ -298,27 +317,25 @@ npm run install-app
 
 ## 다른 사람에게 공유하기
 
-### 방법 1 — GitHub 링크 (추천)
+**Releases 페이지 링크만 공유하면 됩니다:**
 
-저장소 주소만 공유:
+**https://github.com/sangmok1/memo-app/releases/latest**
 
-**https://github.com/sangmok1/memo-app**
+Mac / Windows 설치 파일을 바로 다운로드할 수 있습니다.
 
-받는 사람이 macOS에서:
+### 새 버전 올리는 방법 (개발자)
 
 ```bash
-git clone https://github.com/sangmok1/memo-app.git memo
-cd memo
-npm install
-npm run build
-npm run install-app
+git tag v1.0.1
+git push origin v1.0.1
 ```
 
-Node.js 설치가 필요합니다. 코드도 함께 공유되는 방식입니다.
+태그 push 시 GitHub Actions가 Mac·Windows 빌드를 자동 생성합니다.
 
-### 방법 2 — Memos.app 파일 직접 전달
+<details>
+<summary>수동 공유 방법 (zip 직접 전달)</summary>
 
-빌드된 앱 파일을 zip으로 보내기:
+Mac에서 직접 zip 만들기:
 
 ```bash
 cd ~/Desktop/memo
@@ -327,18 +344,7 @@ cd dist/mac-arm64
 zip -r Memos.app.zip Memos.app
 ```
 
-`Memos.app.zip`을 AirDrop·카카오톡·이메일 등으로 전달.
-
-받는 사람:
-1. zip 압축 해제
-2. `Memos.app`을 **Applications** 폴더로 이동
-3. 처음 실행 시 macOS가 막으면 → **시스템 설정 → 개인정보 보호 및 보안 → 열기** 허용
-
-> ⚠️ 서명되지 않은 앱이라 처음 한 번 보안 경고가 뜰 수 있습니다.
-
-### 방법 3 — GitHub Releases (선택)
-
-나중에 `.dmg`나 `.zip`을 Releases에 올리면, 링크 하나로 다운로드 받게 할 수 있습니다.
+</details>
 
 ---
 
