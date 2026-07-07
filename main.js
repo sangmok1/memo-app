@@ -66,7 +66,10 @@ function writeMarkdown(dateKey, data) {
   if (data.items.length === 0) {
     lines.push('_완료한 일 없음_');
   } else {
-    data.items.forEach((item) => lines.push(`- ${item.text}`));
+    data.items.forEach((item) => {
+      const prefix = item.depth === 1 ? '      - ' : '- ';
+      lines.push(`${prefix}${item.text}`);
+    });
   }
   lines.push('');
   fs.writeFileSync(mdPath, lines.join('\n'), 'utf8');

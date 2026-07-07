@@ -42,8 +42,50 @@ function createId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-function createTodoItem(text = '') {
-  return { id: createId(), text, done: false };
+function createTodoItem(text = '', depth = 0) {
+  return { id: createId(), text, done: false, depth: depth === 1 ? 1 : 0 };
+}
+
+function normalizeItemDepth(item) {
+  if (item.depth !== 1) item.depth = 0;
+}
+
+function formatSummaryLine(text, depth = 0) {
+  const label = text.trim();
+  if (depth === 1) return `      - ${label}`;
+  return `- ${label}`;
+}
+
+function hasParentAbove(items, index) {
+  for (let i = index - 1; i >= 0; i--) {
+    if ((items[i].depth || 0) === 0) return true;
+  }
+  return false;
+}
+
+function getChildIndices(items, parentIndex) {
+  const children = [];
+  for (let i = parentIndex + 1; i < items.length; i++) {
+    if ((items[i].depth || 0) === 1) children.push(i);
+    else break;
+  }
+  return children;
+}
+
+function handleCheckboxChange(listType, index, isDone) {
+  const items = getListByType(listType);
+  if (!items[index]) return;
+
+  items[index].done = isDone;
+
+  if ((items[index].depth || 0) === 0) {
+    getChildIndices(items, index).forEach((i) => {
+      items[i].done = isDone;
+    });
+  }
+
+  saveData(state);
+  renderAllLists();
 }
 
 function getListByType(listType) {
@@ -55,6 +97,8 @@ function getListEl(listType) {
 }
 
 const state = loadData();
+state.today.forEach(normalizeItemDepth);
+state.general.forEach(normalizeItemDepth);
 const todayKey = getDateKey(getKSTDate());
 
 const todayListEl = document.getElementById('today-list');
@@ -66,7 +110,7 @@ todayDateEl.textContent = formatKSTDate(getKSTDate());
 async function archiveItems(dateKey, items) {
   const payload = items
     .filter((t) => t.text.trim())
-    .map((t) => ({ text: t.text.trim() }));
+    .map((t) => ({ text: t.text.trim(), depth: t.depth || 0 }));
 
   if (payload.length === 0) return;
 
@@ -111,7 +155,7 @@ async function handleDayRollover() {
     const text = item.text.trim();
     const suffix = `(${dateLabel})`;
     const newText = text.includes(suffix) ? text : `${text} (${dateLabel})`;
-    state.general.unshift(createTodoItem(newText));
+    state.general.unshift(createTodoItem(newText, item.depth || 0));
   });
 
   state.today = [];
@@ -175,11 +219,33 @@ function setupDropZone(listEl, listType) {
   });
 }
 
+function focusItemInput(listType, index) {
+  requestAnimationFrame(() => {
+    const inputs = getListEl(listType).querySelectorAll('input[type="text"]');
+    const input = inputs[index];
+    if (!input) return;
+    input.focus();
+    const len = input.value.length;
+    input.setSelectionRange(len, len);
+  });
+}
+
+function setItemDepth(listType, index, depth) {
+  const items = getListByType(listType);
+  if (!items[index]) return;
+  if (depth === 1 && !hasParentAbove(items, index)) return;
+  items[index].depth = depth === 1 ? 1 : 0;
+  saveData(state);
+  renderAllLists();
+  focusItemInput(listType, index);
+}
+
 function renderList(listEl, items, listType) {
   listEl.innerHTML = '';
   items.forEach((item, index) => {
     const li = document.createElement('li');
-    li.className = 'todo-item' + (item.done ? ' done' : '');
+    const depth = item.depth === 1 ? 1 : 0;
+    li.className = 'todo-item' + (item.done ? ' done' : '') + (depth === 1 ? ' sub-item' : '');
     li.dataset.id = item.id;
 
     const handle = document.createElement('span');
@@ -209,15 +275,27 @@ function renderList(listEl, items, listType) {
     input.value = item.text;
     input.placeholder = '할일 입력...';
 
+    const indentBtn = document.createElement('button');
+    indentBtn.className = 'btn-indent' + (depth === 1 ? ' active' : '');
+    indentBtn.textContent = depth === 1 ? '‹' : '›';
+    indentBtn.title = depth === 1 ? '상위로' : '하위로';
+    indentBtn.type = 'button';
+    if (depth === 0 && !hasParentAbove(items, index)) {
+      indentBtn.disabled = true;
+      indentBtn.title = '상위 항목 필요';
+    }
+    indentBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setItemDepth(listType, index, depth === 1 ? 0 : 1);
+    });
+
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn-delete';
     deleteBtn.textContent = '×';
     deleteBtn.title = '삭제';
 
     checkbox.addEventListener('change', () => {
-      items[index].done = checkbox.checked;
-      li.classList.toggle('done', checkbox.checked);
-      saveData(state);
+      handleCheckboxChange(listType, index, checkbox.checked);
     });
 
     input.addEventListener('input', () => {
@@ -226,11 +304,16 @@ function renderList(listEl, items, listType) {
     });
 
     input.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        setItemDepth(listType, index, e.shiftKey ? 0 : 1);
+        return;
+      }
       if (e.key === 'Enter') {
         e.preventDefault();
-        addItem(listType);
-        const nextInput = listEl.querySelectorAll('input[type="text"]');
-        nextInput[nextInput.length - 1]?.focus();
+        addItem(listType, items[index].depth || 0);
+        focusItemInput(listType, items.length);
       }
       if (e.key === 'Backspace' && input.value === '' && items.length > 1) {
         e.preventDefault();
@@ -244,12 +327,19 @@ function renderList(listEl, items, listType) {
     });
 
     deleteBtn.addEventListener('click', () => {
+      const wasParent = (items[index].depth || 0) === 0;
       items.splice(index, 1);
+      if (wasParent) {
+        for (let i = index; i < items.length; i++) {
+          if ((items[i].depth || 0) === 1) items[i].depth = 0;
+          else break;
+        }
+      }
       saveData(state);
       renderAllLists();
     });
 
-    li.append(handle, checkbox, input, deleteBtn);
+    li.append(handle, checkbox, indentBtn, input, deleteBtn);
     listEl.appendChild(li);
   });
 }
@@ -259,9 +349,9 @@ function renderAllLists() {
   renderList(generalListEl, state.general, 'general');
 }
 
-function addItem(listType) {
+function addItem(listType, depth = 0) {
   const items = getListByType(listType);
-  items.push(createTodoItem());
+  items.push(createTodoItem('', depth));
   saveData(state);
   renderAllLists();
   const listEl = getListEl(listType);
@@ -291,23 +381,23 @@ function buildSummary() {
   const completedGeneral = state.general.filter((t) => t.done && t.text.trim());
 
   if (completedToday.length === 0 && completedGeneral.length === 0) {
-    return `${date}\n\n완료한 할일이 없습니다.`;
+    return `${date}\n\n완료한 일이 없습니다.`;
   }
 
-  const lines = [`📋 ${date} 완료한 일`, ''];
+  const lines = [`📋 ${date}`, ''];
 
   if (completedToday.length > 0) {
-    lines.push('[오늘 할일]');
-    completedToday.forEach((t, i) => {
-      lines.push(`${i + 1}. ${t.text.trim()}`);
+    lines.push('[오늘 한일]');
+    completedToday.forEach((t) => {
+      lines.push(formatSummaryLine(t.text, t.depth || 0));
     });
     lines.push('');
   }
 
   if (completedGeneral.length > 0) {
     lines.push('[할일]');
-    completedGeneral.forEach((t, i) => {
-      lines.push(`${i + 1}. ${t.text.trim()}`);
+    completedGeneral.forEach((t) => {
+      lines.push(formatSummaryLine(t.text, t.depth || 0));
     });
     lines.push('');
   }

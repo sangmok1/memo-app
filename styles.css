@@ -275,7 +275,7 @@ body {
 .todo-item {
   display: flex;
   align-items: flex-start;
-  gap: 4px;
+  gap: 3px;
 }
 
 .todo-item.dragging {
@@ -300,6 +300,51 @@ body {
 
 .todo-item:hover .drag-handle {
   color: rgba(0, 0, 0, 0.45);
+}
+
+.todo-item.sub-item input[type="text"] {
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(0, 0, 0, 0.12);
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.btn-indent {
+  flex-shrink: 0;
+  width: 11px;
+  height: 14px;
+  margin-top: 3px;
+  border: none;
+  background: none;
+  color: rgba(0, 0, 0, 0.3);
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.25;
+}
+
+.btn-indent:disabled {
+  opacity: 0.12;
+  cursor: default;
+  pointer-events: none;
+}
+
+.btn-indent.active {
+  opacity: 0.45;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.todo-item:hover .btn-indent:not(:disabled) {
+  opacity: 0.75;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.btn-indent:not(:disabled):hover {
+  opacity: 1;
+  color: rgba(0, 0, 0, 0.75);
 }
 
 .todo-item input[type="checkbox"] {

@@ -296,6 +296,52 @@ npm run install-app
 
 ---
 
+## 다른 사람에게 공유하기
+
+### 방법 1 — GitHub 링크 (추천)
+
+저장소 주소만 공유:
+
+**https://github.com/sangmok1/memo-app**
+
+받는 사람이 macOS에서:
+
+```bash
+git clone https://github.com/sangmok1/memo-app.git memo
+cd memo
+npm install
+npm run build
+npm run install-app
+```
+
+Node.js 설치가 필요합니다. 코드도 함께 공유되는 방식입니다.
+
+### 방법 2 — Memos.app 파일 직접 전달
+
+빌드된 앱 파일을 zip으로 보내기:
+
+```bash
+cd ~/Desktop/memo
+npm run build
+cd dist/mac-arm64
+zip -r Memos.app.zip Memos.app
+```
+
+`Memos.app.zip`을 AirDrop·카카오톡·이메일 등으로 전달.
+
+받는 사람:
+1. zip 압축 해제
+2. `Memos.app`을 **Applications** 폴더로 이동
+3. 처음 실행 시 macOS가 막으면 → **시스템 설정 → 개인정보 보호 및 보안 → 열기** 허용
+
+> ⚠️ 서명되지 않은 앱이라 처음 한 번 보안 경고가 뜰 수 있습니다.
+
+### 방법 3 — GitHub Releases (선택)
+
+나중에 `.dmg`나 `.zip`을 Releases에 올리면, 링크 하나로 다운로드 받게 할 수 있습니다.
+
+---
+
 ## 기술 스택
 
 - Electron
