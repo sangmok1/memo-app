@@ -18,13 +18,14 @@
 
 ## ⬇️ 다운로드
 
-### 👉 [**최신 버전 다운로드 (Releases)**](https://github.com/sangmok1/memo-app/releases/latest)
+### 👉 [**최신 버전 (Releases)**](https://github.com/sangmok1/memo-app/releases/latest)
 
-| OS | 파일 | 설치 방법 |
-|----|------|-----------|
-| **Mac** (Apple Silicon) | `Memos-*-arm64-mac.zip` | zip 압축 해제 → `Memos.app`을 Applications로 이동 |
-| **Mac** (Intel) | `Memos-*-mac.zip` | 위와 동일 |
-| **Windows** | `Memos Setup *.exe` | exe 실행 → 설치 마법사 따라하기 |
+| OS | 파일 | 설치 |
+|----|------|------|
+| **Mac** (Intel + Apple Silicon) | **`Memos.zip`** | 압축 해제 → `Memos.app`을 Applications로 이동 |
+| **Windows** | **`Memos Setup *.exe`** | exe 실행 → 설치 |
+
+> Mac에서 실행 안 되면 아래 「Mac 실행이 안 될 때」 참고
 
 ### ⚠️ Mac에서 실행이 안 될 때 (손상됨 / 서명 오류)
 
@@ -40,7 +41,7 @@
 xattr -cr /Applications/Memos.app && open /Applications/Memos.app
 ```
 
-**✅ 또는** Releases에 포함된 **`Memos-Mac-열기.command`** 더블클릭  
+**✅ 또는** Releases의 **`Memos-Mac-Open.command`** 더블클릭  
 (Memos.app을 Applications에 넣어둔 상태)
 
 **✅ 또는** `Memos.app` **우클릭 → 열기** → 「열기」 (최초 1회)

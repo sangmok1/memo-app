@@ -12,9 +12,8 @@ Memos Mac 설치 안내
   xattr -cr /Applications/Memos.app
   open /Applications/Memos.app
 
-[방법 B] Memos-Mac-열기.command 더블클릭
+[방법 B] Memos-Mac-Open.command 더블클릭
 
 [방법 C] Memos.app 우클릭 → 「열기」 → 「열기」
 
-Apple Silicon → Memos-*-arm64-mac.zip
-Intel Mac     → Memos-*-mac.zip
+Apple Silicon / Intel 모두 → Memos.zip (Universal)
