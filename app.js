@@ -16,7 +16,6 @@ function createBellSvg(hue, size = 16) {
   svg.appendChild(path);
   return svg;
 }
-const ALARM_CHECK_INTERVAL = 15000;
 
 function getKSTDate() {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
