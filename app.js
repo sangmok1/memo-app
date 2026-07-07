@@ -221,12 +221,26 @@ function setupDropZone(listEl, listType) {
 
 function focusItemInput(listType, index) {
   requestAnimationFrame(() => {
-    const inputs = getListEl(listType).querySelectorAll('input[type="text"]');
-    const input = inputs[index];
-    if (!input) return;
-    input.focus();
-    const len = input.value.length;
-    input.setSelectionRange(len, len);
+    requestAnimationFrame(() => {
+      const inputs = getListEl(listType).querySelectorAll('input[type="text"]');
+      const input = inputs[index];
+      if (!input) return;
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(0, 0);
+    });
+  });
+}
+
+function insertItemAfter(listType, index, depth = 0) {
+  const items = getListByType(listType);
+  const insertAt = Math.min(index + 1, items.length);
+  items.splice(insertAt, 0, createTodoItem('', depth));
+  saveData(state);
+  renderAllLists();
+  focusItemInput(listType, insertAt);
+  const listEl = getListEl(listType);
+  requestAnimationFrame(() => {
+    listEl.children[insertAt]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   });
 }
 
@@ -312,8 +326,8 @@ function renderList(listEl, items, listType) {
       }
       if (e.key === 'Enter') {
         e.preventDefault();
-        addItem(listType, items[index].depth || 0);
-        focusItemInput(listType, items.length);
+        insertItemAfter(listType, index, items[index].depth || 0);
+        return;
       }
       if (e.key === 'Backspace' && input.value === '' && items.length > 1) {
         e.preventDefault();
@@ -354,6 +368,7 @@ function addItem(listType, depth = 0) {
   items.push(createTodoItem('', depth));
   saveData(state);
   renderAllLists();
+  focusItemInput(listType, items.length - 1);
   const listEl = getListEl(listType);
   requestAnimationFrame(() => {
     listEl.lastElementChild?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
