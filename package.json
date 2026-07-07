@@ -10,11 +10,15 @@
     "install-app": "bash scripts/install-app.sh"
   },
   "build": {
-    "appId": "com.memo.postit",
-    "productName": "Memo",
+    "appId": "com.memos.app",
+    "productName": "Memos",
     "mac": {
       "category": "public.app-category.productivity",
-      "target": ["dir"]
+      "target": ["dir"],
+      "extendInfo": {
+        "CFBundleDisplayName": "Memos",
+        "CFBundleName": "Memos"
+      }
     },
     "directories": {
       "output": "dist"

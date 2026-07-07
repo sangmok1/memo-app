@@ -2,6 +2,11 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
+app.setName('Memos');
+
+const userDataPath = path.join(app.getPath('appData'), 'memo-postit');
+app.setPath('userData', userDataPath);
+
 let mainWindow;
 
 function getConfigPath() {

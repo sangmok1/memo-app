@@ -1,4 +1,4 @@
-# 포스트잇 메모 (Memo)
+# Memos
 
 데스크톱에 띄워두는 포스트잇 스타일 할일 메모 앱입니다.  
 macOS용 Electron 앱이며, 터미널 없이 백그라운드처럼 계속 실행할 수 있습니다.
@@ -65,10 +65,10 @@ npm run build
 npm run install-app
 ```
 
-- `npm run build` → `dist/mac-arm64/Memo.app` 생성
-- `npm run install-app` → `/Applications/Memo.app` 으로 복사 후 자동 실행
+- `npm run build` → `dist/mac-arm64/Memos.app` 생성
+- `npm run install-app` → `/Applications/Memos.app` 으로 복사 후 자동 실행
 
-**이후부터는 터미널 없이 Memo.app만 켜면 됩니다.**
+**이후부터는 터미널 없이 Memos.app만 켜면 됩니다.**
 
 ---
 
@@ -78,26 +78,26 @@ npm run install-app
 
 | 방법 | 명령 / 동작 |
 |------|-------------|
-| **가장 쉬움** | Finder → **응용 프로그램** → **Memo** 더블클릭 |
+| **가장 쉬움** | Finder → **응용 프로그램** → **Memos** 더블클릭 |
 | 터미널에서 | `npm run launch` |
-| Spotlight | `Cmd + Space` → `Memo` 입력 → Enter |
+| Spotlight | `Cmd + Space` → `Memos` 입력 → Enter |
 
 ### 터미널 닫아도 되나?
 
 | 실행 방식 | 터미널 닫아도 됨? |
 |-----------|-------------------|
-| **Memo.app** (Applications) | ✅ **됨** — 터미널과 무관하게 실행 |
-| `npm run launch` | ✅ **됨** — 내부적으로 Memo.app 실행 |
+| **Memos.app** (Applications) | ✅ **됨** — 터미널과 무관하게 실행 |
+| `npm run launch` | ✅ **됨** — 내부적으로 Memos.app 실행 |
 | `npm start` | ❌ **안 됨** — 터미널 닫으면 같이 종료 |
 
-> ⚠️ `npm start`는 **개발용**입니다. 평소에는 **Memo.app**으로 쓰세요.
+> ⚠️ `npm start`는 **개발용**입니다. 평소에는 **Memos.app**으로 쓰세요.
 
 ### 컴퓨터 켤 때 자동 실행
 
 - 기본값: **켜짐**
 - 앱 ⚙ **설정** → **「컴퓨터 켤 때 자동 실행」** 체크/해제
 
-macOS **시스템 설정 → 일반 → 로그인 항목**에서도 Memo 등록 여부를 확인할 수 있습니다.
+macOS **시스템 설정 → 일반 → 로그인 항목**에서도 Memos 등록 여부를 확인할 수 있습니다.
 
 ### 종료 / 최소화
 
@@ -148,7 +148,7 @@ macOS **시스템 설정 → 일반 → 로그인 항목**에서도 Memo 등록 
 | 항목 | 설명 |
 |------|------|
 | **메모 색상** | 슬라이더 좌우로 RGB 색상 변경 |
-| **컴퓨터 켤 때 자동 실행** | 로그인 시 Memo 자동 시작 |
+| **컴퓨터 켤 때 자동 실행** | 로그인 시 Memos 자동 시작 |
 | **완료 기록 폴더 열기** | 날짜별 완료 기록 폴더 열기 |
 
 ---
@@ -204,7 +204,7 @@ macOS **시스템 설정 → 일반 → 로그인 항목**에서도 Memo 등록 
   2026-07-07.md
 ```
 
-Memo.app(설치 버전) 실행 시:
+Memos.app(설치 버전) 실행 시:
 
 ```
 ~/Library/Application Support/memo-postit/archive/
@@ -257,7 +257,7 @@ npm run build
 npm run install-app
 ```
 
-기존 Memo.app을 덮어쓰고 다시 실행합니다. **할일 데이터는 유지**됩니다.
+기존 Memos.app을 덮어쓰고 다시 실행합니다. **할일 데이터는 유지**됩니다.
 
 ---
 
@@ -272,17 +272,17 @@ npm run install-app
 
 ### Q. 터미널 닫았더니 꺼졌어요
 
-`npm start`로 켠 경우입니다. **Applications → Memo**로 다시 실행하세요.
+`npm start`로 켠 경우입니다. **Applications → Memos**로 다시 실행하세요.
 
 ### Q. 다른 창 뒤로 숨기고 싶어요
 
-다른 앱 클릭하면 Memo는 뒤로 갑니다 (항상 위 고정 아님).  
-다시 Memo 창을 클릭하면 앞으로 옵니다.
+다른 앱 클릭하면 Memos는 뒤로 갑니다 (항상 위 고정 아님).  
+다시 Memos 창을 클릭하면 앞으로 옵니다.
 
 ### Q. 완료 기록이 어디 있어요?
 
 ⚙ → **완료 기록 폴더 열기**  
-또는 Finder에서 `~/Library/Application Support/memo-postit/archive/` (Memo.app 사용 시)
+또는 Finder에서 `~/Library/Application Support/memo-postit/archive/` (Memos.app 사용 시)
 
 ### Q. npm 명령어 모음
 
@@ -290,9 +290,9 @@ npm run install-app
 |------|------|
 | `npm install` | 의존성 설치 |
 | `npm start` | 개발용 실행 (터미널 필요) |
-| `npm run build` | Memo.app 빌드 |
+| `npm run build` | Memos.app 빌드 |
 | `npm run install-app` | Applications에 설치 |
-| `npm run launch` | 터미널 없이 Memo 실행 |
+| `npm run launch` | 터미널 없이 Memos 실행 |
 
 ---
 
