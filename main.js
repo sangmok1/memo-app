@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, nativeImage, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -8,6 +8,70 @@ const userDataPath = path.join(app.getPath('appData'), 'memo-postit');
 app.setPath('userData', userDataPath);
 
 let mainWindow;
+let alarmPopupWindow = null;
+let alarmPopupResolve = null;
+
+function closeAlarmPopupWindow() {
+  if (alarmPopupWindow && !alarmPopupWindow.isDestroyed()) {
+    alarmPopupWindow.close();
+  }
+  alarmPopupWindow = null;
+}
+
+function showAlarmPopupWindow({ title, content }) {
+  return new Promise((resolve) => {
+    alarmPopupResolve = resolve;
+    closeAlarmPopupWindow();
+
+    const display = screen.getPrimaryDisplay();
+    const { x, y, width, height } = display.bounds;
+
+    alarmPopupWindow = new BrowserWindow({
+      x,
+      y,
+      width,
+      height,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      resizable: false,
+      movable: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      hasShadow: false,
+      focusable: true,
+      show: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'alarm-popup-preload.js'),
+        contextIsolation: true,
+      },
+    });
+
+    alarmPopupWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    alarmPopupWindow.setAlwaysOnTop(true, 'screen-saver');
+
+    alarmPopupWindow.once('ready-to-show', () => {
+      alarmPopupWindow?.show();
+      alarmPopupWindow?.focus();
+    });
+
+    alarmPopupWindow.webContents.once('did-finish-load', () => {
+      alarmPopupWindow?.webContents.send('alarm-data', { title, content });
+    });
+
+    alarmPopupWindow.on('closed', () => {
+      alarmPopupWindow = null;
+      if (alarmPopupResolve) {
+        alarmPopupResolve();
+        alarmPopupResolve = null;
+      }
+    });
+
+    alarmPopupWindow.loadFile('alarm-popup.html');
+  });
+}
 
 function getConfigPath() {
   return path.join(app.getPath('userData'), 'config.json');
@@ -39,15 +103,19 @@ function applyLoginSettings(enabled) {
   });
 }
 
-function getArchiveDir() {
+function getArchiveRoot() {
   if (app.isPackaged) {
     return path.join(app.getPath('userData'), 'archive');
   }
   return path.join(__dirname, 'archive');
 }
 
-function ensureArchiveDir() {
-  const dir = getArchiveDir();
+function getMemoArchiveDir(memoId) {
+  return path.join(getArchiveRoot(), memoId);
+}
+
+function ensureArchiveRoot() {
+  const dir = getArchiveRoot();
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -60,9 +128,11 @@ function formatDateLabel(dateKey) {
   return `${y}년 ${m}월 ${d}일 (${weekdays[date.getDay()]})`;
 }
 
-function writeMarkdown(dateKey, data) {
-  const mdPath = path.join(getArchiveDir(), `${dateKey}.md`);
-  const lines = [`# ${data.dateLabel}`, ''];
+function writeMarkdown(memoId, dateKey, data) {
+  const archiveDir = getMemoArchiveDir(memoId);
+  fs.mkdirSync(archiveDir, { recursive: true });
+  const mdPath = path.join(archiveDir, `${dateKey}.md`);
+  const lines = [`# ${data.dateLabel}`, '', `메모 ID: ${memoId}`, ''];
   if (data.items.length === 0) {
     lines.push('_완료한 일 없음_');
   } else {
@@ -77,11 +147,11 @@ function writeMarkdown(dateKey, data) {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 300,
+    width: 332,
     height: 420,
-    minWidth: 260,
+    minWidth: 292,
     minHeight: 200,
-    maxWidth: 400,
+    maxWidth: 432,
     maxHeight: 600,
     frame: false,
     transparent: true,
@@ -124,6 +194,22 @@ app.on('activate', () => {
 ipcMain.on('window-close', () => mainWindow?.close());
 ipcMain.on('window-minimize', () => mainWindow?.minimize());
 
+ipcMain.handle('focus-window', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.show();
+  }
+});
+
+ipcMain.handle('show-alarm-popup', (_, payload) => showAlarmPopupWindow(payload));
+
+ipcMain.on('alarm-popup-dismiss', () => {
+  closeAlarmPopupWindow();
+});
+
 ipcMain.handle('get-login-settings', () => {
   const config = loadConfig();
   return { openAtLogin: config.openAtLogin !== false };
@@ -137,13 +223,22 @@ ipcMain.handle('set-login-settings', (_, enabled) => {
   return { openAtLogin: enabled };
 });
 
-ipcMain.handle('archive-completed', (_, dateKey, items) => {
-  ensureArchiveDir();
-  const archiveDir = getArchiveDir();
+ipcMain.handle('create-memo-folder', (_, memoId) => {
+  ensureArchiveRoot();
+  const dir = getMemoArchiveDir(memoId);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+});
+
+ipcMain.handle('archive-completed', (_, memoId, dateKey, items) => {
+  ensureArchiveRoot();
+  const archiveDir = getMemoArchiveDir(memoId);
+  fs.mkdirSync(archiveDir, { recursive: true });
   const filePath = path.join(archiveDir, `${dateKey}.json`);
   let data = {
     date: dateKey,
     dateLabel: formatDateLabel(dateKey),
+    memoId,
     items: [],
   };
 
@@ -157,19 +252,24 @@ ipcMain.handle('archive-completed', (_, dateKey, items) => {
   items.forEach((item) => {
     const text = item.text.trim();
     if (text && !existingTexts.has(text)) {
-      data.items.push({ text, savedAt: now });
+      data.items.push({ text, depth: item.depth || 0, savedAt: now });
       existingTexts.add(text);
     }
   });
 
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-  writeMarkdown(dateKey, data);
+  writeMarkdown(memoId, dateKey, data);
   return filePath;
 });
 
-ipcMain.handle('get-archive-path', () => getArchiveDir());
+ipcMain.handle('get-archive-path', (_, memoId) => {
+  if (memoId) return getMemoArchiveDir(memoId);
+  return getArchiveRoot();
+});
 
-ipcMain.handle('open-archive-folder', () => {
-  ensureArchiveDir();
-  shell.openPath(getArchiveDir());
+ipcMain.handle('open-archive-folder', (_, memoId) => {
+  ensureArchiveRoot();
+  const dir = memoId ? getMemoArchiveDir(memoId) : getArchiveRoot();
+  fs.mkdirSync(dir, { recursive: true });
+  shell.openPath(dir);
 });

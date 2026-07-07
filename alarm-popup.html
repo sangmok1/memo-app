@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>알람</title>
+  <link rel="stylesheet" href="alarm-popup.css">
+</head>
+<body>
+  <div class="overlay">
+    <div class="card">
+      <div class="bell">🔔</div>
+      <p class="title" id="alarm-title"></p>
+      <p class="body" id="alarm-body"></p>
+      <p class="hint">5분 후 자동으로 닫힙니다</p>
+      <div class="actions">
+        <button class="btn btn-ok" id="btn-ok" title="확인">✓</button>
+        <button class="btn btn-close" id="btn-close" title="닫기">×</button>
+      </div>
+    </div>
+  </div>
+  <script src="alarm-popup.js"></script>
+</body>
+</html>

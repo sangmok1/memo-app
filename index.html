@@ -7,7 +7,13 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="postit">
+  <div class="app-shell">
+    <aside class="memo-sidebar">
+      <div class="memo-list" id="memo-list"></div>
+      <button class="btn-new-memo" id="btn-new-memo" title="새로 만들기">+</button>
+    </aside>
+
+    <div class="postit">
     <header class="titlebar">
       <div class="titlebar-drag"></div>
       <div class="titlebar-buttons">
@@ -18,41 +24,123 @@
     </header>
 
     <div class="settings-panel hidden" id="settings-panel">
-      <label class="color-label" for="color-slider">메모 색상</label>
+      <label class="color-label" for="color-slider" id="color-label">메모 색상</label>
       <input type="range" id="color-slider" min="0" max="360" value="54" class="color-slider">
       <label class="setting-row">
         <input type="checkbox" id="login-at-start" checked>
         <span>컴퓨터 켤 때 자동 실행</span>
       </label>
       <button class="btn-archive-link" id="btn-open-archive">완료 기록 폴더 열기</button>
+      <button class="btn-delete-memo" id="btn-delete-memo">이 메모 삭제</button>
     </div>
 
     <main class="content">
       <div class="scroll-area">
-        <section class="section section-today">
-          <div class="section-header">
-            <h2>오늘 할일</h2>
-            <span class="date" id="today-date"></span>
-          </div>
-          <ul class="todo-list" id="today-list"></ul>
-          <button class="btn-add" data-list="today">+ 추가</button>
-        </section>
+        <div id="memo-view" class="view-panel">
+          <section class="section section-today">
+            <div class="section-header">
+              <h2>오늘 할일</h2>
+              <span class="date" id="today-date"></span>
+            </div>
+            <ul class="todo-list" id="today-list"></ul>
+            <button class="btn-add" data-list="today">+ 추가</button>
+          </section>
 
-        <div class="divider"></div>
+          <div class="divider"></div>
 
-        <section class="section section-general">
-          <div class="section-header">
-            <h2>할일</h2>
-          </div>
-          <ul class="todo-list" id="general-list"></ul>
-          <button class="btn-add" data-list="general">+ 추가</button>
-        </section>
+          <section class="section section-general">
+            <div class="section-header">
+              <h2>할일</h2>
+            </div>
+            <ul class="todo-list" id="general-list"></ul>
+            <button class="btn-add" data-list="general">+ 추가</button>
+          </section>
+        </div>
+
+        <div id="alarm-view" class="view-panel hidden">
+          <section class="section section-once">
+            <div class="section-header">
+              <h2>1회성 알람</h2>
+            </div>
+            <ul class="alarm-list" id="once-alarm-list"></ul>
+            <button class="btn-add" id="btn-add-once-alarm">+ 알람 추가</button>
+          </section>
+
+          <div class="divider"></div>
+
+          <section class="section section-recurring">
+            <div class="section-header">
+              <h2>주기적 알람</h2>
+            </div>
+            <ul class="alarm-list" id="recurring-alarm-list"></ul>
+            <button class="btn-add" id="btn-add-recurring-alarm">+ 알람 추가</button>
+          </section>
+        </div>
       </div>
     </main>
 
-    <footer class="footer">
+    <footer class="footer" id="memo-footer">
       <button class="btn-summary" id="btn-summary">오늘 한일 정리하기</button>
     </footer>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="create-type-modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-content-sm">
+      <h3>새로 만들기</h3>
+      <div class="create-type-actions">
+        <button class="create-type-btn" id="btn-create-memo">
+          <span class="create-type-icon memo-icon"></span>
+          <span>메모</span>
+        </button>
+        <button class="create-type-btn" id="btn-create-alarm">
+          <span class="create-type-icon alarm-icon"></span>
+          <span>알람</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="alarm-form-modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-content-form">
+      <div class="modal-form-header">
+        <h3 id="alarm-form-title">알람 추가</h3>
+      </div>
+      <div class="modal-form-scroll">
+        <label class="form-label">알람 제목</label>
+        <input type="text" id="alarm-title-input" class="form-input" placeholder="알람 제목">
+        <label class="form-label">알람 내용</label>
+        <textarea id="alarm-content-input" class="form-textarea" placeholder="알람 내용"></textarea>
+        <label class="form-label">시간 (KST)</label>
+        <input type="time" id="alarm-time-input" class="form-input" value="09:00">
+        <div id="alarm-date-row">
+          <label class="form-label">날짜</label>
+          <input type="date" id="alarm-date-input" class="form-input">
+        </div>
+        <div id="alarm-days-row" class="hidden">
+          <label class="form-label">요일</label>
+          <div class="day-picker" id="alarm-day-picker">
+            <button type="button" class="day-btn" data-day="1">월</button>
+            <button type="button" class="day-btn" data-day="2">화</button>
+            <button type="button" class="day-btn" data-day="3">수</button>
+            <button type="button" class="day-btn" data-day="4">목</button>
+            <button type="button" class="day-btn" data-day="5">금</button>
+            <button type="button" class="day-btn" data-day="6">토</button>
+            <button type="button" class="day-btn" data-day="0">일</button>
+          </div>
+        </div>
+        <label class="setting-row">
+          <input type="checkbox" id="alarm-repeat-input">
+          <span>반복하기 (주기적 알람)</span>
+        </label>
+      </div>
+      <div class="modal-actions modal-form-footer">
+        <button class="btn-copy" id="btn-save-alarm">저장</button>
+        <button class="btn-close-modal" id="btn-cancel-alarm">취소</button>
+      </div>
+    </div>
   </div>
 
   <div class="modal hidden" id="summary-modal">
@@ -63,6 +151,18 @@
       <div class="modal-actions">
         <button class="btn-copy" id="btn-copy">복사</button>
         <button class="btn-close-modal" id="btn-close-modal">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="delete-modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-content-sm">
+      <h3 id="delete-modal-title">삭제</h3>
+      <p class="modal-message" id="delete-modal-message">삭제하시겠습니까?</p>
+      <div class="modal-actions">
+        <button class="btn-danger" id="btn-confirm-delete">삭제</button>
+        <button class="btn-close-modal" id="btn-cancel-delete">취소</button>
       </div>
     </div>
   </div>

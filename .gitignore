@@ -3,4 +3,7 @@ dist/
 .DS_Store
 archive/*.json
 archive/*.md
+archive/*/
+archive/*/*.json
+archive/*/*.md
 !archive/README.md
