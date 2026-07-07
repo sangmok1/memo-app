@@ -22,12 +22,32 @@
 
 | OS | 파일 | 설치 방법 |
 |----|------|-----------|
-| **Mac** (Apple Silicon) | `Memos-*-mac-arm64.zip` | zip 압축 해제 → `Memos.app`을 Applications로 이동 |
-| **Mac** (Intel) | `Memos-*-mac-x64.zip` | 위와 동일 |
+| **Mac** (Apple Silicon) | `Memos-*-arm64-mac.zip` | zip 압축 해제 → `Memos.app`을 Applications로 이동 |
+| **Mac** (Intel) | `Memos-*-mac.zip` | 위와 동일 |
 | **Windows** | `Memos Setup *.exe` | exe 실행 → 설치 마법사 따라하기 |
 
-> 처음 실행 시 OS 보안 경고가 뜰 수 있습니다.  
-> Mac: **시스템 설정 → 개인정보 보호 → 열기** / Windows: **추가 정보 → 실행**
+### ⚠️ Mac에서 실행이 안 될 때 (손상됨 / 서명 오류)
+
+파일이 **손상된 게 아닙니다.** Apple Developer 유료 서명($99/년)이 없는 앱이라 macOS가 차단하는 것입니다.
+
+아래 메시지가 뜨는 경우도 **같은 이유**입니다:
+> 「해당 코드가 서명된 원본 코드와 일치하지 않습니다」  
+> 「앱이 손상되었거나 변경되었을 수 있습니다」
+
+**✅ 해결 — Applications에 넣은 뒤 터미널에서 한 줄:**
+
+```bash
+xattr -cr /Applications/Memos.app && open /Applications/Memos.app
+```
+
+**✅ 또는** Releases에 포함된 **`Memos-Mac-열기.command`** 더블클릭  
+(Memos.app을 Applications에 넣어둔 상태)
+
+**✅ 또는** `Memos.app` **우클릭 → 열기** → 「열기」 (최초 1회)
+
+**✅ 또는** 시스템 설정 → **개인정보 보호 및 보안** → 「확인 없이 열기」
+
+> 💡 Apple Developer 계정으로 공식 서명·공증(notarization)을 하면 이 과정 없이 바로 열립니다. 현재는 개인 배포라 위 우회가 필요합니다.
 
 Node.js 없이 **다운로드만으로** 사용할 수 있습니다.
 
@@ -313,6 +333,17 @@ npm run install-app
 ---
 
 ## 자주 묻는 것 / 문제 해결
+
+### Q. Mac에서 「손상되어 열 수 없습니다」 / 「손상됨」
+
+파일 문제가 **아닙니다.** 다운로드한 앱의 보안 검사(quarantine) 때문입니다.
+
+```bash
+xattr -cr /Applications/Memos.app
+open /Applications/Memos.app
+```
+
+또는 **우클릭 → 열기**로 최초 1회 실행하세요.
 
 ### Q. 메모가 안 켜져요
 

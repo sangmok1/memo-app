@@ -9,5 +9,6 @@ fi
 
 rm -rf /Applications/Memo.app /Applications/포잇.app /Applications/Memos.app 2>/dev/null
 cp -R "$APP" "/Applications/Memos.app"
+xattr -cr "/Applications/Memos.app"
 echo "Installed: /Applications/Memos.app"
 open "/Applications/Memos.app"

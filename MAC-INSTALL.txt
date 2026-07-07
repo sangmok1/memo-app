@@ -1,0 +1,20 @@
+Memos Mac 설치 안내
+====================
+
+1. zip 압축 해제
+2. Memos.app → Applications(응용 프로그램)으로 이동
+
+실행이 안 될 때 (손상됨 / 서명 오류)
+------------------------------------
+파일 문제가 아닙니다. macOS 보안 차단입니다.
+
+[방법 A] 터미널
+  xattr -cr /Applications/Memos.app
+  open /Applications/Memos.app
+
+[방법 B] Memos-Mac-열기.command 더블클릭
+
+[방법 C] Memos.app 우클릭 → 「열기」 → 「열기」
+
+Apple Silicon → Memos-*-arm64-mac.zip
+Intel Mac     → Memos-*-mac.zip
