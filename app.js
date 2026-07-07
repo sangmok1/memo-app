@@ -804,17 +804,18 @@ async function processAlarmQueue() {
 
 async function showAlarmRingPopup(payload) {
   isAlarmRingOpen = true;
-
-  if (window.electronAPI?.showAlarmPopup) {
-    await window.electronAPI.showAlarmPopup({
-      title: payload.title,
-      content: payload.content,
-    });
-  } else if (window.electronAPI?.focusWindow) {
-    await window.electronAPI.focusWindow();
+  try {
+    if (window.electronAPI?.showAlarmPopup) {
+      await window.electronAPI.showAlarmPopup({
+        title: payload.title,
+        content: payload.content,
+      });
+    }
+  } catch {
+    await window.electronAPI?.forceCloseAlarmPopup?.();
+  } finally {
+    dismissAlarmRing();
   }
-
-  dismissAlarmRing();
 }
 
 function enqueueAlarmRing(alarm) {

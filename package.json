@@ -1,6 +1,6 @@
 {
   "name": "memo-postit",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "description": "포스트잇 스타일 데스크톱 할일 메모",
   "main": "main.js",
   "author": "sangmok1",
@@ -53,7 +53,8 @@
       "**/*",
       "!dist/**",
       "!archive/*.json",
-      "!archive/*.md"
+      "!archive/*.md",
+      "!README.md"
     ]
   },
   "devDependencies": {

@@ -10,17 +10,44 @@ app.setPath('userData', userDataPath);
 let mainWindow;
 let alarmPopupWindow = null;
 let alarmPopupResolve = null;
+let alarmPopupPayload = null;
+let alarmAutoCloseTimer = null;
+
+function finishAlarmPopup() {
+  if (alarmAutoCloseTimer) {
+    clearTimeout(alarmAutoCloseTimer);
+    alarmAutoCloseTimer = null;
+  }
+  if (alarmPopupResolve) {
+    alarmPopupResolve();
+    alarmPopupResolve = null;
+  }
+  alarmPopupPayload = null;
+}
 
 function closeAlarmPopupWindow() {
+  if (alarmAutoCloseTimer) {
+    clearTimeout(alarmAutoCloseTimer);
+    alarmAutoCloseTimer = null;
+  }
   if (alarmPopupWindow && !alarmPopupWindow.isDestroyed()) {
     alarmPopupWindow.close();
   }
   alarmPopupWindow = null;
 }
 
+function sendAlarmDataToPopup() {
+  if (!alarmPopupWindow || alarmPopupWindow.isDestroyed() || !alarmPopupPayload) return;
+  alarmPopupWindow.webContents.send('alarm-data', alarmPopupPayload);
+}
+
 function showAlarmPopupWindow({ title, content }) {
   return new Promise((resolve) => {
     alarmPopupResolve = resolve;
+    alarmPopupPayload = {
+      title: String(title || '알람').slice(0, 100),
+      content: String(content || '').slice(0, 500),
+    };
     closeAlarmPopupWindow();
 
     const display = screen.getPrimaryDisplay();
@@ -46,6 +73,7 @@ function showAlarmPopupWindow({ title, content }) {
       webPreferences: {
         preload: path.join(__dirname, 'alarm-popup-preload.js'),
         contextIsolation: true,
+        sandbox: false,
       },
     });
 
@@ -57,19 +85,16 @@ function showAlarmPopupWindow({ title, content }) {
       alarmPopupWindow?.focus();
     });
 
-    alarmPopupWindow.webContents.once('did-finish-load', () => {
-      alarmPopupWindow?.webContents.send('alarm-data', { title, content });
-    });
-
     alarmPopupWindow.on('closed', () => {
       alarmPopupWindow = null;
-      if (alarmPopupResolve) {
-        alarmPopupResolve();
-        alarmPopupResolve = null;
-      }
+      finishAlarmPopup();
     });
 
-    alarmPopupWindow.loadFile('alarm-popup.html');
+    alarmAutoCloseTimer = setTimeout(() => {
+      closeAlarmPopupWindow();
+    }, 5 * 60 * 1000);
+
+    alarmPopupWindow.loadFile(path.join(__dirname, 'alarm-popup.html'));
   });
 }
 
@@ -208,6 +233,15 @@ ipcMain.handle('show-alarm-popup', (_, payload) => showAlarmPopupWindow(payload)
 
 ipcMain.on('alarm-popup-dismiss', () => {
   closeAlarmPopupWindow();
+});
+
+ipcMain.on('alarm-popup-ready', () => {
+  sendAlarmDataToPopup();
+});
+
+ipcMain.handle('force-close-alarm-popup', () => {
+  closeAlarmPopupWindow();
+  return true;
 });
 
 ipcMain.handle('get-login-settings', () => {

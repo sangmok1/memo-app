@@ -2,23 +2,94 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'unsafe-inline'">
   <title>알람</title>
-  <link rel="stylesheet" href="alarm-popup.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      user-select: none;
+    }
+    .overlay {
+      width: 100vw; height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0, 0, 0, 0.62);
+      padding: 40px;
+    }
+    .card {
+      width: min(880px, 92vw);
+      max-height: min(86vh, 900px);
+      background: linear-gradient(160deg, #fffef8 0%, #fff6dc 100%);
+      border-radius: 20px;
+      padding: 36px 48px 32px;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+      text-align: center;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .bell { font-size: 48px; margin-bottom: 12px; }
+    .title {
+      font-size: 15px; font-weight: 600;
+      color: rgba(0, 0, 0, 0.45);
+      margin-bottom: 20px;
+    }
+    .body {
+      flex: 1; min-height: 0; overflow-y: auto; width: 100%;
+      font-size: clamp(28px, 4vw, 56px);
+      font-weight: 700; line-height: 1.35;
+      color: rgba(0, 0, 0, 0.88);
+      white-space: pre-wrap; word-break: keep-all;
+      user-select: text; padding: 0 8px;
+    }
+    .hint { margin-top: 24px; font-size: 13px; color: rgba(0, 0, 0, 0.32); }
+    .actions { display: flex; gap: 20px; margin-top: 28px; }
+    .btn {
+      width: 64px; height: 64px; border: none; border-radius: 50%;
+      font-size: 28px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .btn-ok { background: #43a047; color: white; font-weight: 700; }
+    .btn-close { background: rgba(0, 0, 0, 0.1); color: rgba(0, 0, 0, 0.55); }
+  </style>
 </head>
 <body>
-  <div class="overlay">
+  <div class="overlay" id="overlay">
     <div class="card">
       <div class="bell">🔔</div>
-      <p class="title" id="alarm-title"></p>
+      <p class="title" id="alarm-title">알람</p>
       <p class="body" id="alarm-body"></p>
-      <p class="hint">5분 후 자동으로 닫힙니다</p>
+      <p class="hint">✓ / × 또는 Esc · 5분 후 자동 닫힘</p>
       <div class="actions">
         <button class="btn btn-ok" id="btn-ok" title="확인">✓</button>
         <button class="btn btn-close" id="btn-close" title="닫기">×</button>
       </div>
     </div>
   </div>
-  <script src="alarm-popup.js"></script>
+  <script>
+    const titleEl = document.getElementById('alarm-title');
+    const bodyEl = document.getElementById('alarm-body');
+
+    function dismiss() {
+      window.alarmPopupAPI?.dismiss();
+    }
+
+    document.getElementById('btn-ok').addEventListener('click', dismiss);
+    document.getElementById('btn-close').addEventListener('click', dismiss);
+    document.getElementById('overlay').addEventListener('click', (e) => {
+      if (e.target.id === 'overlay') dismiss();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') dismiss();
+    });
+
+    function showAlarm({ title, content }) {
+      titleEl.textContent = title || '알람';
+      const text = (content || '').trim();
+      bodyEl.textContent = text.length > 500 ? text.slice(0, 500) + '…' : (text || '(내용 없음)');
+    }
+
+    window.alarmPopupAPI?.onAlarmData(showAlarm);
+    window.alarmPopupAPI?.signalReady();
+  </script>
 </body>
 </html>
