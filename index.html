@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>메모</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="postit">
+    <header class="titlebar">
+      <div class="titlebar-drag"></div>
+      <div class="titlebar-buttons">
+        <button class="btn-icon" id="btn-settings" title="설정">⚙</button>
+        <button class="btn-icon" id="btn-minimize" title="최소화">−</button>
+        <button class="btn-icon" id="btn-close" title="닫기">×</button>
+      </div>
+    </header>
+
+    <div class="settings-panel hidden" id="settings-panel">
+      <label class="color-label" for="color-slider">메모 색상</label>
+      <input type="range" id="color-slider" min="0" max="360" value="54" class="color-slider">
+      <label class="setting-row">
+        <input type="checkbox" id="login-at-start" checked>
+        <span>컴퓨터 켤 때 자동 실행</span>
+      </label>
+      <button class="btn-archive-link" id="btn-open-archive">완료 기록 폴더 열기</button>
+    </div>
+
+    <main class="content">
+      <div class="scroll-area">
+        <section class="section section-today">
+          <div class="section-header">
+            <h2>오늘 할일</h2>
+            <span class="date" id="today-date"></span>
+          </div>
+          <ul class="todo-list" id="today-list"></ul>
+          <button class="btn-add" data-list="today">+ 추가</button>
+        </section>
+
+        <div class="divider"></div>
+
+        <section class="section section-general">
+          <div class="section-header">
+            <h2>할일</h2>
+          </div>
+          <ul class="todo-list" id="general-list"></ul>
+          <button class="btn-add" data-list="general">+ 추가</button>
+        </section>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <button class="btn-summary" id="btn-summary">오늘 한일 정리하기</button>
+    </footer>
+  </div>
+
+  <div class="modal hidden" id="summary-modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <h3>오늘 한일 정리</h3>
+      <textarea id="summary-text" readonly></textarea>
+      <div class="modal-actions">
+        <button class="btn-copy" id="btn-copy">복사</button>
+        <button class="btn-close-modal" id="btn-close-modal">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

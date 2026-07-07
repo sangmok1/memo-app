@@ -1,0 +1,33 @@
+{
+  "name": "memo-postit",
+  "version": "1.0.0",
+  "description": "포스트잇 스타일 데스크톱 할일 메모",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --mac dir",
+    "launch": "bash scripts/launch.sh",
+    "install-app": "bash scripts/install-app.sh"
+  },
+  "build": {
+    "appId": "com.memo.postit",
+    "productName": "Memo",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": ["dir"]
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!archive/*.json",
+      "!archive/*.md"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  }
+}
