@@ -67,7 +67,7 @@ function writeMarkdown(dateKey, data) {
     lines.push('_완료한 일 없음_');
   } else {
     data.items.forEach((item) => {
-      const prefix = item.depth === 1 ? '      ○ ' : '○ ';
+      const prefix = item.depth === 1 ? '      - ' : '- ';
       lines.push(`${prefix}${item.text}`);
     });
   }

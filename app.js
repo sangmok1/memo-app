@@ -52,8 +52,8 @@ function normalizeItemDepth(item) {
 
 function formatSummaryLine(text, depth = 0) {
   const label = text.trim();
-  if (depth === 1) return `      ○ ${label}`;
-  return `○ ${label}`;
+  if (depth === 1) return `      - ${label}`;
+  return `- ${label}`;
 }
 
 function hasParentAbove(items, index) {
