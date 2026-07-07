@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -94,7 +94,17 @@ function createWindow() {
   mainWindow.loadFile('index.html');
 }
 
+function setAppIcon() {
+  const iconPath = path.join(__dirname, 'build/icon.png');
+  if (!fs.existsSync(iconPath)) return;
+  const icon = nativeImage.createFromPath(iconPath);
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(icon);
+  }
+}
+
 app.whenReady().then(() => {
+  setAppIcon();
   const config = loadConfig();
   applyLoginSettings(config.openAtLogin !== false);
   createWindow();
