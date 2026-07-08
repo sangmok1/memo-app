@@ -26,6 +26,15 @@
     <div class="settings-panel hidden" id="settings-panel">
       <label class="color-label" for="color-slider" id="color-label">메모 색상</label>
       <input type="range" id="color-slider" min="0" max="360" value="54" class="color-slider">
+      <label class="setting-row" id="auto-wrap-row">
+        <input type="checkbox" id="auto-wrap" checked>
+        <span>자동 줄바꿈</span>
+      </label>
+      <label class="setting-row setting-number-row" id="alarm-size-row" style="display: none;">
+        <span>알람 크기</span>
+        <input type="number" id="alarm-popup-size" class="setting-number-input" min="20" max="100" step="5" value="50">
+        <span>%</span>
+      </label>
       <label class="setting-row">
         <input type="checkbox" id="login-at-start" checked>
         <span>컴퓨터 켤 때 자동 실행</span>

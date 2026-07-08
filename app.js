@@ -2,6 +2,7 @@ const STORAGE_KEY = 'memo-postit-data';
 const ARCHIVE_FALLBACK_KEY = 'memo-postit-archive';
 const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 const ALARM_CHECK_INTERVAL = 15000;
+const DAY_CHECK_INTERVAL = 60 * 60 * 1000;
 
 const BELL_PATH = 'M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.9 2.49.4 4 2.42 4 4.9v6z';
 
@@ -59,6 +60,7 @@ function createEmptyMemo(id) {
     general: [createTodoItem()],
     savedDate: getDateKey(getKSTDate()),
     colorHue: 54,
+    autoWrap: true,
   };
 }
 
@@ -70,6 +72,7 @@ function createEmptyAlarm(id) {
     onceAlarms: [],
     recurringAlarms: [],
     colorHue: 200,
+    popupSizePercent: 50,
   };
 }
 
@@ -94,6 +97,9 @@ function migrateData(raw) {
       if (item.type === 'alarm') {
         item.onceAlarms = item.onceAlarms || [];
         item.recurringAlarms = item.recurringAlarms || [];
+        if (item.popupSizePercent === undefined) item.popupSizePercent = 50;
+      } else if (item.autoWrap === undefined) {
+        item.autoWrap = true;
       }
     });
     return raw;
@@ -113,6 +119,7 @@ function migrateData(raw) {
         general: legacy.general?.length ? legacy.general : [createTodoItem()],
         savedDate: legacy.savedDate || getDateKey(getKSTDate()),
         colorHue: legacy.colorHue ?? 54,
+        autoWrap: legacy.autoWrap !== false,
       },
     },
   };
@@ -200,9 +207,13 @@ function formatAlarmTimeMeta(alarm, recurring) {
   return `${Number(parts[1])}/${Number(parts[2])} (${weekday}) ${alarm.time}`;
 }
 
+function getTodayKey() {
+  return getDateKey(getKSTDate());
+}
+
 let appState = loadAppState();
 let currentMemo = appState.memos[appState.activeMemoId];
-const todayKey = getDateKey(getKSTDate());
+let lastCheckedDateKey = null;
 
 const todayListEl = document.getElementById('today-list');
 const generalListEl = document.getElementById('general-list');
@@ -256,6 +267,7 @@ async function archiveItems(memoId, dateKey, items) {
 async function handleDayRolloverForMemo(memo) {
   if (isAlarmBoard(memo)) return;
 
+  const todayKey = getTodayKey();
   memo.today.forEach(normalizeItemDepth);
   memo.general.forEach(normalizeItemDepth);
 
@@ -272,7 +284,7 @@ async function handleDayRolloverForMemo(memo) {
     await archiveItems(memo.id, yesterdayKey, completed);
   }
 
-  const toMove = memo.today.filter((t) => t.text.trim());
+  const toMove = memo.today.filter((t) => t.text.trim() && !t.done);
   toMove.reverse().forEach((item) => {
     const text = item.text.trim();
     const suffix = `(${dateLabel})`;
@@ -281,7 +293,22 @@ async function handleDayRolloverForMemo(memo) {
   });
 
   memo.today = [createTodoItem()];
-  memo.savedDate = todayKey;
+  memo.savedDate = getTodayKey();
+}
+
+async function checkDayRollover() {
+  const todayKey = getTodayKey();
+  todayDateEl.textContent = formatKSTDate(getKSTDate());
+
+  if (todayKey === lastCheckedDateKey) return;
+
+  lastCheckedDateKey = todayKey;
+  for (const id of appState.memoOrder) {
+    await handleDayRolloverForMemo(appState.memos[id]);
+  }
+  currentMemo = appState.memos[appState.activeMemoId];
+  saveAppState();
+  refreshActiveUI();
 }
 
 function handleCheckboxChange(listType, index, isDone) {
@@ -352,15 +379,97 @@ function setupDropZone(listEl, listType) {
   });
 }
 
+function isAutoWrapEnabled() {
+  return !isAlarmBoard(currentMemo) && currentMemo.autoWrap !== false;
+}
+
 function focusItemInput(listType, index) {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      const input = getListEl(listType).querySelectorAll('input[type="text"]')[index];
+      const input = getListEl(listType).querySelectorAll('.todo-text')[index];
       if (!input) return;
       input.focus({ preventScroll: true });
-      input.setSelectionRange(0, 0);
+      if (input.tagName === 'INPUT') {
+        const len = input.value.length;
+        input.setSelectionRange(len, len);
+        return;
+      }
+      const range = document.createRange();
+      range.selectNodeContents(input);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
     });
   });
+}
+
+function getTodoText(el) {
+  if (el.tagName === 'INPUT') return el.value;
+  return el.textContent.replace(/\u00a0/g, ' ').trimEnd();
+}
+
+function syncTodoTextPlaceholder(el) {
+  if (el.tagName === 'INPUT') return;
+  el.classList.toggle('is-empty', !getTodoText(el));
+}
+
+function bindTodoTextEvents(input, items, index, listType) {
+  const onChange = () => {
+    items[index].text = getTodoText(input);
+    syncTodoTextPlaceholder(input);
+    saveData();
+  };
+
+  input.addEventListener('input', onChange);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      setItemDepth(listType, index, e.shiftKey ? 0 : 1);
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      items[index].text = getTodoText(input);
+      insertItemAfter(listType, index, items[index].depth || 0);
+      return;
+    }
+    const empty = input.tagName === 'INPUT' ? !input.value : !getTodoText(input);
+    if (e.key === 'Backspace' && empty && items.length > 1) {
+      e.preventDefault();
+      items.splice(index, 1);
+      saveData();
+      renderAllLists();
+      focusItemInput(listType, Math.max(0, index - 1));
+    }
+  });
+
+  if (input.tagName === 'DIV') {
+    input.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const text = e.clipboardData.getData('text/plain').replace(/\r?\n/g, ' ');
+      document.execCommand('insertText', false, text);
+    });
+  }
+}
+
+function createTodoTextField(item) {
+  if (isAutoWrapEnabled()) {
+    const input = document.createElement('div');
+    input.className = 'todo-text wrap' + (item.text.trim() ? '' : ' is-empty');
+    input.contentEditable = 'true';
+    input.spellcheck = false;
+    input.dataset.placeholder = '할일 입력...';
+    input.textContent = item.text;
+    return input;
+  }
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'todo-text single-line';
+  input.value = item.text;
+  input.placeholder = '할일 입력...';
+  return input;
 }
 
 function insertItemAfter(listType, index, depth = 0) {
@@ -409,10 +518,7 @@ function renderList(listEl, items, listType) {
     checkbox.type = 'checkbox';
     checkbox.checked = item.done;
 
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = item.text;
-    input.placeholder = '할일 입력...';
+    const input = createTodoTextField(item);
 
     const indentBtn = document.createElement('button');
     indentBtn.className = 'btn-indent' + (depth === 1 ? ' active' : '');
@@ -432,29 +538,7 @@ function renderList(listEl, items, listType) {
     deleteBtn.title = '삭제';
 
     checkbox.addEventListener('change', () => handleCheckboxChange(listType, index, checkbox.checked));
-    input.addEventListener('input', () => {
-      items[index].text = input.value;
-      saveData();
-    });
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        setItemDepth(listType, index, e.shiftKey ? 0 : 1);
-        return;
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        insertItemAfter(listType, index, items[index].depth || 0);
-        return;
-      }
-      if (e.key === 'Backspace' && input.value === '' && items.length > 1) {
-        e.preventDefault();
-        items.splice(index, 1);
-        saveData();
-        renderAllLists();
-        focusItemInput(listType, Math.max(0, index - 1));
-      }
-    });
+    bindTodoTextEvents(input, items, index, listType);
     deleteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const wasParent = (items[index].depth || 0) === 0;
@@ -584,10 +668,20 @@ function updateDeleteMemoButton() {
     : '마지막 항목은 삭제할 수 없습니다';
 }
 
+function normalizePopupSizePercent(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 50;
+  return Math.min(100, Math.max(20, Math.round(n)));
+}
+
 function updateSettingsForType() {
   const isAlarm = isAlarmBoard(currentMemo);
   document.getElementById('color-label').textContent = isAlarm ? '알람 색상' : '메모 색상';
   document.getElementById('btn-open-archive').style.display = isAlarm ? 'none' : '';
+  const autoWrapRow = document.getElementById('auto-wrap-row');
+  if (autoWrapRow) autoWrapRow.style.display = isAlarm ? 'none' : '';
+  const alarmSizeRow = document.getElementById('alarm-size-row');
+  if (alarmSizeRow) alarmSizeRow.style.display = isAlarm ? '' : 'none';
 }
 
 function refreshActiveUI() {
@@ -600,6 +694,12 @@ function refreshActiveUI() {
   alarmViewEl.classList.toggle('hidden', !isAlarm);
   memoFooterEl.classList.toggle('hidden', isAlarm);
   updateSettingsForType();
+  const autoWrapEl = document.getElementById('auto-wrap');
+  if (autoWrapEl && !isAlarm) autoWrapEl.checked = currentMemo.autoWrap !== false;
+  const alarmSizeEl = document.getElementById('alarm-popup-size');
+  if (alarmSizeEl && isAlarm) {
+    alarmSizeEl.value = normalizePopupSizePercent(currentMemo.popupSizePercent);
+  }
 
   if (isAlarm) {
     renderAlarmLists();
@@ -809,6 +909,7 @@ async function showAlarmRingPopup(payload) {
       await window.electronAPI.showAlarmPopup({
         title: payload.title,
         content: payload.content,
+        sizePercent: normalizePopupSizePercent(payload.popupSizePercent),
       });
     }
   } catch {
@@ -818,10 +919,11 @@ async function showAlarmRingPopup(payload) {
   }
 }
 
-function enqueueAlarmRing(alarm) {
+function enqueueAlarmRing(alarm, popupSizePercent) {
   alarmQueue.push({
     title: alarm.title,
     content: alarm.content,
+    popupSizePercent: normalizePopupSizePercent(popupSizePercent),
   });
   processAlarmQueue();
 }
@@ -837,7 +939,7 @@ function checkAllAlarms() {
     board.onceAlarms.forEach((alarm) => {
       if (shouldTriggerAlarm(alarm, now, false)) {
         markAlarmTriggered(alarm, now, false);
-        enqueueAlarmRing(alarm);
+        enqueueAlarmRing(alarm, board.popupSizePercent);
         changed = true;
       }
     });
@@ -845,7 +947,7 @@ function checkAllAlarms() {
     board.recurringAlarms.forEach((alarm) => {
       if (shouldTriggerAlarm(alarm, now, true)) {
         markAlarmTriggered(alarm, now, true);
-        enqueueAlarmRing(alarm);
+        enqueueAlarmRing(alarm, board.popupSizePercent);
         changed = true;
       }
     });
@@ -918,7 +1020,7 @@ document.getElementById('btn-summary').addEventListener('click', async () => {
   summaryText.value = buildSummary();
   const completedToday = currentMemo.today.filter((t) => t.done && t.text.trim());
   if (completedToday.length > 0) {
-    await archiveItems(currentMemo.id, todayKey, completedToday);
+    await archiveItems(currentMemo.id, getTodayKey(), completedToday);
   }
   summaryModal.classList.remove('hidden');
 });
@@ -964,6 +1066,29 @@ colorSlider.addEventListener('input', () => {
   saveColor(Number(colorSlider.value));
 });
 
+const autoWrapEl = document.getElementById('auto-wrap');
+if (autoWrapEl) {
+  autoWrapEl.addEventListener('change', () => {
+    if (isAlarmBoard(currentMemo)) return;
+    currentMemo.autoWrap = autoWrapEl.checked;
+    saveData();
+    renderAllLists();
+  });
+}
+
+const alarmPopupSizeEl = document.getElementById('alarm-popup-size');
+if (alarmPopupSizeEl) {
+  const applyAlarmPopupSize = () => {
+    if (!isAlarmBoard(currentMemo)) return;
+    const size = normalizePopupSizePercent(alarmPopupSizeEl.value);
+    alarmPopupSizeEl.value = size;
+    currentMemo.popupSizePercent = size;
+    saveData();
+  };
+  alarmPopupSizeEl.addEventListener('change', applyAlarmPopupSize);
+  alarmPopupSizeEl.addEventListener('blur', applyAlarmPopupSize);
+}
+
 const btnOpenArchive = document.getElementById('btn-open-archive');
 if (btnOpenArchive) {
   if (window.electronAPI?.openArchiveFolder) {
@@ -1007,9 +1132,7 @@ setupDropZone(todayListEl, 'today');
 setupDropZone(generalListEl, 'general');
 
 async function boot() {
-  for (const id of appState.memoOrder) {
-    await handleDayRolloverForMemo(appState.memos[id]);
-  }
+  await checkDayRollover();
 
   if (window.electronAPI?.createMemoFolder) {
     for (const id of appState.memoOrder) {
@@ -1024,6 +1147,10 @@ async function boot() {
   refreshActiveUI();
   checkAllAlarms();
   setInterval(checkAllAlarms, ALARM_CHECK_INTERVAL);
+  setInterval(checkDayRollover, DAY_CHECK_INTERVAL);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkDayRollover();
+  });
 }
 
 boot();

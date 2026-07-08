@@ -267,6 +267,28 @@ body {
   cursor: pointer;
 }
 
+.setting-number-row {
+  cursor: default;
+  justify-content: flex-start;
+}
+
+.setting-number-input {
+  width: 52px;
+  margin-left: auto;
+  padding: 2px 4px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: inherit;
+  text-align: right;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.setting-number-input:focus {
+  outline: none;
+  border-color: hsl(var(--hue, 54), 70%, 45%);
+}
+
 .btn-archive-link:hover {
   color: rgba(0, 0, 0, 0.65);
 }
@@ -413,7 +435,7 @@ body {
   color: rgba(0, 0, 0, 0.45);
 }
 
-.todo-item.sub-item input[type="text"] {
+.todo-item.sub-item .todo-text {
   margin-left: 8px;
   padding-left: 8px;
   border-left: 1px solid rgba(0, 0, 0, 0.12);
@@ -467,8 +489,33 @@ body {
   flex-shrink: 0;
 }
 
-.todo-item input[type="text"] {
+.todo-item .todo-text.wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.todo-item .todo-text.wrap.is-empty::before {
+  content: attr(data-placeholder);
+  color: rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+.todo-item input.todo-text.single-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.todo-item input.todo-text.single-line::placeholder {
+  color: rgba(0, 0, 0, 0.25);
+}
+
+.todo-item .todo-text,
+.todo-item input.todo-text {
   flex: 1;
+  min-width: 0;
   border: none;
   background: transparent;
   font-size: 13px;
@@ -476,14 +523,13 @@ body {
   outline: none;
   line-height: 1.4;
   user-select: text;
-  min-width: 0;
+  font-family: inherit;
+  padding: 0;
+  margin: 0;
 }
 
-.todo-item input[type="text"]::placeholder {
-  color: rgba(0, 0, 0, 0.25);
-}
-
-.todo-item.done input[type="text"] {
+.todo-item.done .todo-text,
+.todo-item.done input.todo-text {
   text-decoration: line-through;
   color: rgba(0, 0, 0, 0.35);
 }

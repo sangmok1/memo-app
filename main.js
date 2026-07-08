@@ -41,7 +41,13 @@ function sendAlarmDataToPopup() {
   alarmPopupWindow.webContents.send('alarm-data', alarmPopupPayload);
 }
 
-function showAlarmPopupWindow({ title, content }) {
+function normalizePopupSizePercent(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 50;
+  return Math.min(100, Math.max(20, Math.round(n)));
+}
+
+function showAlarmPopupWindow({ title, content, sizePercent }) {
   return new Promise((resolve) => {
     alarmPopupResolve = resolve;
     alarmPopupPayload = {
@@ -51,13 +57,18 @@ function showAlarmPopupWindow({ title, content }) {
     closeAlarmPopupWindow();
 
     const display = screen.getPrimaryDisplay();
-    const { x, y, width, height } = display.bounds;
+    const { x, y, width, height } = display.workArea;
+    const percent = normalizePopupSizePercent(sizePercent);
+    const popupWidth = Math.round(width * (percent / 100));
+    const popupHeight = Math.round(height * (percent / 100));
+    const popupX = x + Math.round((width - popupWidth) / 2);
+    const popupY = y + Math.round((height - popupHeight) / 2);
 
     alarmPopupWindow = new BrowserWindow({
-      x,
-      y,
-      width,
-      height,
+      x: popupX,
+      y: popupY,
+      width: popupWidth,
+      height: popupHeight,
       frame: false,
       transparent: true,
       alwaysOnTop: true,
@@ -67,7 +78,7 @@ function showAlarmPopupWindow({ title, content }) {
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
-      hasShadow: false,
+      hasShadow: true,
       focusable: true,
       show: false,
       webPreferences: {
