@@ -9,6 +9,8 @@ source "$DIR/scripts/load-signing-env.sh"
 
 VERSION=$(node -p "require('./package.json').version")
 unset CSC_IDENTITY_AUTO_DISCOVERY
+# 서명만 — APPLE_* 가 있으면 electron-builder가 공증까지 시도함
+unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
 
 echo "=== Memos v${VERSION} 서명 릴리스 (공증 없음) ==="
 
