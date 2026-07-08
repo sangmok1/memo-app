@@ -180,6 +180,47 @@ function getChildIndices(items, parentIndex) {
   return children;
 }
 
+function getMoveBlockIndices(items, index) {
+  if (!items[index]) return [];
+  if ((items[index].depth || 0) === 1) return [index];
+  return [index, ...getChildIndices(items, index)];
+}
+
+let dragState = null;
+
+function clearDropIndicators() {
+  document.querySelectorAll('.drop-placeholder').forEach((el) => el.remove());
+  document.querySelectorAll('.todo-list').forEach((el) => {
+    el.classList.remove('drag-over');
+    delete el.dataset.dropIndex;
+  });
+  document.querySelectorAll('.todo-item.dragging-follow').forEach((el) => {
+    el.classList.remove('dragging-follow');
+  });
+}
+
+function updateDropIndicator(listEl, dropIndex, blockSize) {
+  document.querySelectorAll('.drop-placeholder').forEach((el) => el.remove());
+  document.querySelectorAll('.todo-list').forEach((el) => el.classList.remove('drag-over'));
+
+  listEl.classList.add('drag-over');
+  listEl.dataset.dropIndex = String(dropIndex);
+
+  const items = [...listEl.querySelectorAll('.todo-item:not(.dragging):not(.dragging-follow)')];
+  const placeholder = document.createElement('li');
+  placeholder.className = 'drop-placeholder';
+  placeholder.setAttribute('aria-hidden', 'true');
+  const rowHeight = 28;
+  const gap = 4;
+  placeholder.style.height = `${Math.max(1, blockSize) * rowHeight + (Math.max(1, blockSize) - 1) * gap}px`;
+
+  if (dropIndex >= items.length) {
+    listEl.appendChild(placeholder);
+  } else {
+    listEl.insertBefore(placeholder, items[dropIndex]);
+  }
+}
+
 function getListByType(listType) {
   return listType === 'today' ? currentMemo.today : currentMemo.general;
 }
@@ -332,21 +373,27 @@ function moveItem(fromType, toType, itemId, toIndex) {
   const fromIndex = fromList.findIndex((i) => i.id === itemId);
   if (fromIndex === -1) return;
 
-  const [item] = fromList.splice(fromIndex, 1);
-  const toList = getListByType(toType);
+  const blockIndices = getMoveBlockIndices(fromList, fromIndex);
+  const blockItems = blockIndices.map((i) => fromList[i]);
 
-  let insertIndex = Math.max(0, Math.min(toIndex, toList.length));
-  if (fromType === toType && fromIndex < insertIndex) {
-    insertIndex -= 1;
+  for (let i = blockIndices.length - 1; i >= 0; i--) {
+    fromList.splice(blockIndices[i], 1);
   }
 
-  toList.splice(insertIndex, 0, item);
+  const toList = getListByType(toType);
+  let insertIndex = Math.max(0, Math.min(toIndex, toList.length));
+
+  if (fromType === toType && fromIndex < insertIndex) {
+    insertIndex -= blockIndices.length;
+  }
+
+  toList.splice(insertIndex, 0, ...blockItems);
   saveData();
   renderAllLists();
 }
 
 function getDropIndex(listEl, clientY) {
-  const items = [...listEl.querySelectorAll('.todo-item:not(.dragging)')];
+  const items = [...listEl.querySelectorAll('.todo-item:not(.dragging):not(.dragging-follow)')];
   for (let i = 0; i < items.length; i++) {
     const rect = items[i].getBoundingClientRect();
     if (clientY < rect.top + rect.height / 2) return i;
@@ -358,24 +405,27 @@ function setupDropZone(listEl, listType) {
   listEl.addEventListener('dragover', (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    listEl.classList.add('drag-over');
-    listEl.dataset.dropIndex = String(getDropIndex(listEl, e.clientY));
+    const dropIndex = getDropIndex(listEl, e.clientY);
+    const blockSize = dragState?.blockSize || 1;
+    updateDropIndicator(listEl, dropIndex, blockSize);
   });
 
   listEl.addEventListener('dragleave', (e) => {
     if (!listEl.contains(e.relatedTarget)) {
       listEl.classList.remove('drag-over');
+      listEl.querySelectorAll('.drop-placeholder').forEach((el) => el.remove());
     }
   });
 
   listEl.addEventListener('drop', (e) => {
     e.preventDefault();
-    listEl.classList.remove('drag-over');
+    clearDropIndicators();
     const itemId = e.dataTransfer.getData('text/plain');
     const fromType = e.dataTransfer.getData('application/list-type');
     if (!itemId || !fromType) return;
     const toIndex = Number(listEl.dataset.dropIndex ?? getDropIndex(listEl, e.clientY));
     moveItem(fromType, listType, itemId, toIndex);
+    dragState = null;
   });
 }
 
@@ -505,13 +555,24 @@ function renderList(listEl, items, listType) {
     handle.title = '드래그해서 옮기기';
     handle.draggable = true;
     handle.addEventListener('dragstart', (e) => {
+      const blockIndices = getMoveBlockIndices(items, index);
+      dragState = {
+        itemId: item.id,
+        listType,
+        blockSize: blockIndices.length,
+      };
       e.dataTransfer.setData('text/plain', item.id);
       e.dataTransfer.setData('application/list-type', listType);
       li.classList.add('dragging');
+      blockIndices.slice(1).forEach((childIndex) => {
+        const childLi = listEl.querySelector(`.todo-item[data-id="${items[childIndex].id}"]`);
+        childLi?.classList.add('dragging-follow');
+      });
     });
     handle.addEventListener('dragend', () => {
       li.classList.remove('dragging');
-      document.querySelectorAll('.todo-list').forEach((el) => el.classList.remove('drag-over'));
+      dragState = null;
+      clearDropIndicators();
     });
 
     const checkbox = document.createElement('input');

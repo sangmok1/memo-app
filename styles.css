@@ -400,19 +400,40 @@ body {
 }
 
 .todo-list.drag-over {
-  background: rgba(0, 0, 0, 0.05);
-  outline: 1px dashed rgba(0, 0, 0, 0.15);
-  outline-offset: 2px;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.drop-placeholder {
+  list-style: none;
+  border-radius: 5px;
+  background: hsla(var(--hue, 54), 72%, 48%, 0.14);
+  border: 2px dashed hsla(var(--hue, 54), 65%, 42%, 0.65);
+  box-sizing: border-box;
+  margin: 1px 0;
+  flex-shrink: 0;
+  pointer-events: none;
+  animation: drop-placeholder-pulse 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes drop-placeholder-pulse {
+  from { opacity: 0.75; }
+  to { opacity: 1; }
 }
 
 .todo-item {
   display: flex;
   align-items: flex-start;
   gap: 3px;
+  transition: transform 0.12s ease;
 }
 
 .todo-item.dragging {
-  opacity: 0.35;
+  opacity: 0.4;
+}
+
+.todo-item.dragging-follow {
+  opacity: 0.28;
+  pointer-events: none;
 }
 
 .drag-handle {
@@ -433,14 +454,6 @@ body {
 
 .todo-item:hover .drag-handle {
   color: rgba(0, 0, 0, 0.45);
-}
-
-.todo-item.sub-item .todo-text {
-  margin-left: 8px;
-  padding-left: 8px;
-  border-left: 1px solid rgba(0, 0, 0, 0.12);
-  font-size: 12px;
-  color: rgba(0, 0, 0, 0.65);
 }
 
 .btn-indent {
@@ -487,6 +500,18 @@ body {
   accent-color: hsl(var(--hue, 54), 70%, 45%);
   cursor: pointer;
   flex-shrink: 0;
+}
+
+.todo-item.sub-item input[type="checkbox"] {
+  margin-left: 12px;
+}
+
+.todo-item.sub-item .todo-text {
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(0, 0, 0, 0.12);
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.65);
 }
 
 .todo-item .todo-text.wrap {
