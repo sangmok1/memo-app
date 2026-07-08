@@ -70,7 +70,8 @@ function showAlarmPopupWindow({ title, content, sizePercent }) {
       width: popupWidth,
       height: popupHeight,
       frame: false,
-      transparent: true,
+      transparent: false,
+      backgroundColor: '#fffef8',
       alwaysOnTop: true,
       skipTaskbar: true,
       resizable: false,
@@ -94,6 +95,10 @@ function showAlarmPopupWindow({ title, content, sizePercent }) {
     alarmPopupWindow.once('ready-to-show', () => {
       alarmPopupWindow?.show();
       alarmPopupWindow?.focus();
+    });
+
+    alarmPopupWindow.webContents.on('did-finish-load', () => {
+      sendAlarmDataToPopup();
     });
 
     alarmPopupWindow.on('closed', () => {
