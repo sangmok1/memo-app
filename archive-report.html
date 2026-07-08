@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>Memos · 완료 기록</title>
+  <link rel="stylesheet" href="archive-report.css">
+</head>
+<body>
+  <div class="report-window">
+    <header class="report-toolbar">
+      <div class="report-controls">
+        <select id="report-period-type" class="report-select" aria-label="기간">
+          <option value="week">주간</option>
+          <option value="month">월간</option>
+          <option value="quarter">분기</option>
+          <option value="half">반기</option>
+          <option value="year">년</option>
+        </select>
+        <input type="date" id="report-ref-date" class="report-date-input" aria-label="기준 날짜">
+      </div>
+      <div id="report-week-start-row" class="report-week-row">
+        <span class="report-week-label">주 시작</span>
+        <div class="day-picker" id="report-week-start">
+          <button type="button" class="day-btn" data-day="1">월</button>
+          <button type="button" class="day-btn active" data-day="2">화</button>
+          <button type="button" class="day-btn" data-day="3">수</button>
+          <button type="button" class="day-btn" data-day="4">목</button>
+          <button type="button" class="day-btn" data-day="5">금</button>
+          <button type="button" class="day-btn" data-day="6">토</button>
+          <button type="button" class="day-btn" data-day="0">일</button>
+        </div>
+      </div>
+      <p class="report-range-label" id="report-range-label"></p>
+    </header>
+    <div class="report-scroll">
+      <article class="report-journal" id="report-journal"></article>
+    </div>
+    <footer class="report-footer">
+      <button type="button" class="btn-report-action btn-close-win" id="btn-report-close">닫기</button>
+      <button type="button" class="btn-report-action" id="btn-report-copy">복사</button>
+      <button type="button" class="btn-report-action btn-primary" id="btn-report-save">파일 저장</button>
+    </footer>
+  </div>
+  <script src="archive-report.js"></script>
+</body>
+</html>

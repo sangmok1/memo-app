@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   archiveCompleted: (memoId, dateKey, items) => ipcRenderer.invoke('archive-completed', memoId, dateKey, items),
   getArchivePath: (memoId) => ipcRenderer.invoke('get-archive-path', memoId),
   openArchiveFolder: (memoId) => ipcRenderer.invoke('open-archive-folder', memoId),
+  openArchiveReportWindow: (memoId) => ipcRenderer.invoke('open-archive-report-window', memoId),
   getLoginSettings: () => ipcRenderer.invoke('get-login-settings'),
   setLoginSettings: (enabled) => ipcRenderer.invoke('set-login-settings', enabled),
 });

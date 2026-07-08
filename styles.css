@@ -250,6 +250,21 @@ body {
   text-underline-offset: 2px;
 }
 
+.settings-archive-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  padding: 2px 0 0;
+}
+
+.settings-archive-sep {
+  font-size: 10px;
+  color: rgba(0, 0, 0, 0.28);
+  user-select: none;
+  padding: 0 2px;
+}
+
 .setting-row {
   display: flex;
   align-items: center;

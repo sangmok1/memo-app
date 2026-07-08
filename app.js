@@ -739,6 +739,10 @@ function updateSettingsForType() {
   const isAlarm = isAlarmBoard(currentMemo);
   document.getElementById('color-label').textContent = isAlarm ? '알람 색상' : '메모 색상';
   document.getElementById('btn-open-archive').style.display = isAlarm ? 'none' : '';
+  const archiveRow = document.querySelector('.settings-archive-row');
+  if (archiveRow) archiveRow.style.display = isAlarm ? 'none' : '';
+  const btnArchiveReport = document.getElementById('btn-archive-report');
+  if (btnArchiveReport) btnArchiveReport.style.display = isAlarm ? 'none' : '';
   const autoWrapRow = document.getElementById('auto-wrap-row');
   if (autoWrapRow) autoWrapRow.style.display = isAlarm ? 'none' : '';
   const alarmSizeRow = document.getElementById('alarm-size-row');
@@ -751,6 +755,7 @@ function refreshActiveUI() {
   todayDateEl.textContent = formatKSTDate(getKSTDate());
 
   const isAlarm = isAlarmBoard(currentMemo);
+
   memoViewEl.classList.toggle('hidden', isAlarm);
   alarmViewEl.classList.toggle('hidden', !isAlarm);
   memoFooterEl.classList.toggle('hidden', isAlarm);
@@ -1158,6 +1163,19 @@ if (btnOpenArchive) {
     });
   } else {
     btnOpenArchive.style.display = 'none';
+  }
+}
+
+const btnArchiveReport = document.getElementById('btn-archive-report');
+if (btnArchiveReport) {
+  if (window.electronAPI?.openArchiveReportWindow) {
+    btnArchiveReport.addEventListener('click', () => {
+      if (!isAlarmBoard(currentMemo)) {
+        window.electronAPI.openArchiveReportWindow(currentMemo.id);
+      }
+    });
+  } else {
+    btnArchiveReport.style.display = 'none';
   }
 }
 

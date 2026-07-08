@@ -8,6 +8,7 @@ const userDataPath = path.join(app.getPath('appData'), 'memo-postit');
 app.setPath('userData', userDataPath);
 
 let mainWindow;
+let archiveReportWindow = null;
 let alarmPopupWindow = null;
 let alarmPopupResolve = null;
 let alarmPopupPayload = null;
@@ -186,6 +187,58 @@ function writeMarkdown(memoId, dateKey, data) {
   fs.writeFileSync(mdPath, lines.join('\n'), 'utf8');
 }
 
+function sendArchiveReportMemoId(memoId) {
+  if (!archiveReportWindow || archiveReportWindow.isDestroyed() || !memoId) return;
+  archiveReportWindow.webContents.send('archive-report-memo-id', memoId);
+}
+
+function openArchiveReportWindow(memoId) {
+  if (!memoId) return;
+
+  if (archiveReportWindow && !archiveReportWindow.isDestroyed()) {
+    sendArchiveReportMemoId(memoId);
+    if (archiveReportWindow.isMinimized()) archiveReportWindow.restore();
+    archiveReportWindow.show();
+    archiveReportWindow.focus();
+    return;
+  }
+
+  const display = screen.getPrimaryDisplay();
+  const { width: screenW, height: screenH } = display.workAreaSize;
+  const winWidth = Math.min(640, screenW - 40);
+  const winHeight = Math.min(860, screenH - 40);
+
+  archiveReportWindow = new BrowserWindow({
+    width: winWidth,
+    height: winHeight,
+    minWidth: 420,
+    minHeight: 520,
+    title: 'Memos · 완료 기록',
+    backgroundColor: '#f0ebe0',
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'archive-report-preload.js'),
+      contextIsolation: true,
+    },
+  });
+
+  archiveReportWindow.once('ready-to-show', () => {
+    archiveReportWindow?.show();
+    archiveReportWindow?.focus();
+    sendArchiveReportMemoId(memoId);
+  });
+
+  archiveReportWindow.webContents.on('did-finish-load', () => {
+    sendArchiveReportMemoId(memoId);
+  });
+
+  archiveReportWindow.on('closed', () => {
+    archiveReportWindow = null;
+  });
+
+  archiveReportWindow.loadFile(path.join(__dirname, 'archive-report.html'));
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 332,
@@ -260,6 +313,16 @@ ipcMain.handle('force-close-alarm-popup', () => {
   return true;
 });
 
+ipcMain.handle('open-archive-report-window', (_, memoId) => {
+  openArchiveReportWindow(memoId);
+});
+
+ipcMain.on('archive-report-close', () => {
+  if (archiveReportWindow && !archiveReportWindow.isDestroyed()) {
+    archiveReportWindow.close();
+  }
+});
+
 ipcMain.handle('get-login-settings', () => {
   const config = loadConfig();
   return { openAtLogin: config.openAtLogin !== false };
@@ -322,4 +385,32 @@ ipcMain.handle('open-archive-folder', (_, memoId) => {
   const dir = memoId ? getMemoArchiveDir(memoId) : getArchiveRoot();
   fs.mkdirSync(dir, { recursive: true });
   shell.openPath(dir);
+});
+
+ipcMain.handle('fetch-archive-period', (_, memoId, startKey, endKey) => {
+  ensureArchiveRoot();
+  const dir = getMemoArchiveDir(memoId);
+  if (!fs.existsSync(dir)) return [];
+
+  const result = [];
+  for (const file of fs.readdirSync(dir)) {
+    if (!/^\d{4}-\d{2}-\d{2}\.json$/.test(file)) continue;
+    const dateKey = file.slice(0, 10);
+    if (dateKey < startKey || dateKey > endKey) continue;
+    try {
+      result.push(JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8')));
+    } catch {}
+  }
+  result.sort((a, b) => a.date.localeCompare(b.date));
+  return result;
+});
+
+ipcMain.handle('save-period-report', (_, memoId, fileName, content) => {
+  ensureArchiveRoot();
+  const reportsDir = path.join(getMemoArchiveDir(memoId), 'reports');
+  fs.mkdirSync(reportsDir, { recursive: true });
+  const safeName = path.basename(fileName).replace(/[^\w.\-가-힣]/g, '_');
+  const filePath = path.join(reportsDir, safeName.endsWith('.md') ? safeName : `${safeName}.md`);
+  fs.writeFileSync(filePath, content, 'utf8');
+  return filePath;
 });

@@ -1,0 +1,244 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  background: #f0ebe0;
+  color: rgba(0, 0, 0, 0.82);
+}
+
+.report-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 720px;
+  margin: 0 auto;
+  background: #f7f3e8;
+}
+
+.report-toolbar {
+  flex-shrink: 0;
+  padding: 16px 20px 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  background: #faf6ee;
+}
+
+.report-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.report-select,
+.report-date-input {
+  flex: 1;
+  font-size: 14px;
+  font-family: inherit;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  color: rgba(0, 0, 0, 0.78);
+}
+
+.report-week-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.report-week-row.hidden {
+  display: none;
+}
+
+.report-week-label {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  flex-shrink: 0;
+}
+
+.day-picker {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.day-btn {
+  flex: 1;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  border-radius: 6px;
+  padding: 6px 0;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.day-btn.active {
+  background: hsl(54, 72%, 88%);
+  border-color: hsl(54, 55%, 55%);
+  color: rgba(0, 0, 0, 0.78);
+  font-weight: 600;
+}
+
+.report-range-label {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.report-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.report-journal {
+  background: linear-gradient(180deg, #fffef9 0%, #fff8ea 100%);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 4px 24px rgba(0, 0, 0, 0.07);
+  padding: 28px 32px 32px;
+  min-height: 100%;
+}
+
+.journal-header {
+  text-align: center;
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.journal-kicker {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: hsl(54, 45%, 42%);
+  margin-bottom: 8px;
+}
+
+.journal-title {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: rgba(0, 0, 0, 0.85);
+  margin-bottom: 6px;
+}
+
+.journal-meta {
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.journal-day {
+  margin-bottom: 24px;
+}
+
+.journal-day-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.62);
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.12);
+}
+
+.journal-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.journal-item {
+  font-size: 15px;
+  line-height: 1.7;
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.journal-item::before {
+  content: '·';
+  margin-right: 8px;
+  color: hsl(54, 55%, 48%);
+  font-weight: 700;
+}
+
+.journal-item.sub {
+  margin-left: 20px;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.62);
+  padding-left: 12px;
+  border-left: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+.journal-item.sub::before {
+  content: '–';
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.journal-day-empty,
+.journal-empty {
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.38);
+  font-style: italic;
+}
+
+.journal-footer {
+  margin-top: 12px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  text-align: center;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.journal-footer strong {
+  color: rgba(0, 0, 0, 0.62);
+}
+
+.report-footer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 14px 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  background: #faf6ee;
+}
+
+.btn-report-action {
+  border: none;
+  background: rgba(0, 0, 0, 0.08);
+  font-size: 13px;
+  font-family: inherit;
+  color: rgba(0, 0, 0, 0.65);
+  padding: 9px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn-report-action:hover {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.btn-report-action.btn-primary {
+  background: hsl(54, 55%, 42%);
+  color: #fff;
+}
+
+.btn-report-action.btn-primary:hover {
+  background: hsl(54, 55%, 36%);
+}
+
+.btn-close-win {
+  margin-right: auto;
+}
