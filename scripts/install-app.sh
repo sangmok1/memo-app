@@ -1,6 +1,18 @@
 #!/bin/bash
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$(find "$DIR/dist" -name "*.app" -maxdepth 3 2>/dev/null | head -1)"
+APP=""
+for candidate in \
+  "$DIR/dist/mac-universal/Memos.app" \
+  "$DIR/dist/mac-arm64/Memos.app" \
+  "$DIR/dist/mac/Memos.app"; do
+  if [ -d "$candidate" ]; then
+    APP="$candidate"
+    break
+  fi
+done
+if [ -z "$APP" ]; then
+  APP="$(find "$DIR/dist" -name "Memos.app" -maxdepth 3 2>/dev/null | head -1)"
+fi
 
 if [ -z "$APP" ]; then
   echo "Memos.app not found. Run: npm run build"
@@ -8,7 +20,6 @@ if [ -z "$APP" ]; then
 fi
 
 rm -rf /Applications/Memo.app /Applications/포잇.app /Applications/Memos.app 2>/dev/null
-cp -R "$APP" "/Applications/Memos.app"
-xattr -cr "/Applications/Memos.app"
+ditto "$APP" "/Applications/Memos.app"
 echo "Installed: /Applications/Memos.app"
 open "/Applications/Memos.app"
