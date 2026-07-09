@@ -17,6 +17,26 @@ npx electron-builder --mac dir --universal --publish never -c electron-builder.s
 
 APP="$DIR/dist/mac-universal/Memos.app"
 OUT_ZIP="$DIR/dist/Memos.zip"
+
+if ! spctl -a -t exec -vv "$APP" 2>&1 | grep -q "source=Notarized Developer ID"; then
+  echo "⚠️  electron-builder 공증 미완료 — notarytool로 재시도..."
+  TMPZIP="$(mktemp /tmp/Memos-notarize.XXXXXX.zip)"
+  ditto -c -k --keepParent "$APP" "$TMPZIP"
+  xcrun notarytool submit "$TMPZIP" \
+    --apple-id "$APPLE_ID" \
+    --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+    --team-id "$APPLE_TEAM_ID" \
+    --wait
+  rm -f "$TMPZIP"
+  xcrun stapler staple -v "$APP"
+fi
+
+if ! spctl -a -t exec -vv "$APP" 2>&1 | grep -q "source=Notarized Developer ID"; then
+  echo "❌ 공증 검증 실패. Gatekeeper에서 차단됩니다."
+  exit 1
+fi
+echo "   ✓ Apple 공증 확인됨 (Notarized Developer ID)"
+
 rm -f "$OUT_ZIP"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUT_ZIP"
 echo "   $OUT_ZIP"
