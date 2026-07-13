@@ -160,8 +160,8 @@ function normalizeItemDepth(item) {
 
 function formatSummaryLine(text, depth = 0) {
   const label = text.trim();
-  if (depth === 1) return `      - ${label}`;
-  return `- ${label}`;
+  if (depth === 1) return `  ◦ ${label}`;
+  return `• ${label}`;
 }
 
 function hasParentAbove(items, index) {
@@ -320,7 +320,9 @@ async function handleDayRolloverForMemo(memo) {
   const yesterdayKey = memo.savedDate;
   const dateLabel = formatShortDateFromKey(yesterdayKey);
 
-  const completed = memo.today.filter((t) => t.done && t.text.trim());
+  const completedToday = memo.today.filter((t) => t.done && t.text.trim());
+  const completedGeneral = memo.general.filter((t) => t.done && t.text.trim());
+  const completed = [...completedToday, ...completedGeneral];
   if (completed.length > 0) {
     await archiveItems(memo.id, yesterdayKey, completed);
   }
@@ -334,6 +336,8 @@ async function handleDayRolloverForMemo(memo) {
   });
 
   memo.today = [createTodoItem()];
+  memo.general = memo.general.filter((t) => !(t.done && t.text.trim()));
+  if (!memo.general.length) memo.general = [createTodoItem()];
   memo.savedDate = getTodayKey();
 }
 
@@ -1034,21 +1038,12 @@ function buildSummary() {
     return `${date}\n\n완료한 일이 없습니다.`;
   }
 
-  const lines = [`📋 ${date}`, ''];
+  const lines = [];
 
-  if (completedToday.length > 0) {
-    lines.push('[오늘 한일]');
-    completedToday.forEach((t) => lines.push(formatSummaryLine(t.text, t.depth || 0)));
-    lines.push('');
-  }
+  completedToday.forEach((t) => lines.push(formatSummaryLine(t.text, t.depth || 0)));
+  if (completedToday.length > 0 && completedGeneral.length > 0) lines.push('');
+  completedGeneral.forEach((t) => lines.push(formatSummaryLine(t.text, t.depth || 0)));
 
-  if (completedGeneral.length > 0) {
-    lines.push('[할일]');
-    completedGeneral.forEach((t) => lines.push(formatSummaryLine(t.text, t.depth || 0)));
-    lines.push('');
-  }
-
-  lines.push(`총 ${completedToday.length + completedGeneral.length}건 완료`);
   return lines.join('\n');
 }
 
