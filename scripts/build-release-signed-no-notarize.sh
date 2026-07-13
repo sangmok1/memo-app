@@ -15,9 +15,10 @@ unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
 echo "=== Memos v${VERSION} 서명 릴리스 (공증 없음) ==="
 
 echo "→ Mac (Universal, signed)..."
+rm -rf "$DIR/dist/mac-universal"
 npx electron-builder --mac dir --universal --publish never
 
-APP="$DIR/dist/mac-universal/Memos.app"
+APP="$(bash "$DIR/scripts/resolve-mac-app.sh" "$DIR/dist/mac-universal" "$VERSION")"
 OUT_ZIP="$DIR/dist/Memos.zip"
 rm -f "$OUT_ZIP"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUT_ZIP"

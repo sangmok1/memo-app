@@ -13,10 +13,23 @@ unset CSC_IDENTITY_AUTO_DISCOVERY
 echo "=== Memos v${VERSION} 서명 + 공증 릴리스 빌드 ==="
 
 echo "→ Mac (Universal, signed + notarized)..."
+rm -rf "$DIR/dist/mac-universal"
 npx electron-builder --mac dir --universal --publish never -c electron-builder.signed.json
 
-APP="$DIR/dist/mac-universal/Memos.app"
+APP="$(bash "$DIR/scripts/resolve-mac-app.sh" "$DIR/dist/mac-universal" "$VERSION")"
 OUT_ZIP="$DIR/dist/Memos.zip"
+
+ASAR_VER=$(node -e "
+  const {execSync}=require('child_process'); const os=require('os');
+  const tmp=os.tmpdir()+'/memos-verify-'+process.pid;
+  execSync('npx --yes asar extract '+JSON.stringify(process.argv[1])+' '+JSON.stringify(tmp), {stdio:'ignore'});
+  console.log(require(tmp+'/package.json').version);
+" "$APP/Contents/Resources/app.asar")
+if [ "$ASAR_VER" != "$VERSION" ]; then
+  echo "❌ 빌드 버전 불일치: app=$ASAR_VER, package.json=$VERSION"
+  exit 1
+fi
+echo "   ✓ 빌드 확인: $APP (v$ASAR_VER)"
 
 if ! spctl -a -t exec -vv "$APP" 2>&1 | grep -q "source=Notarized Developer ID"; then
   echo "⚠️  electron-builder 공증 미완료 — notarytool로 재시도..."

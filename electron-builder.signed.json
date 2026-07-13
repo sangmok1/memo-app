@@ -1,4 +1,5 @@
 {
+  "productName": "Memos",
   "mac": {
     "notarize": true
   }
