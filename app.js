@@ -96,6 +96,7 @@ function migrateData(raw) {
   if (raw && raw.memos && raw.memoOrder) {
     const now = new Date().toISOString();
     if (!raw.updatedAt) raw.updatedAt = now;
+    if (!raw.deletedMemos) raw.deletedMemos = {};
     Object.values(raw.memos).forEach((item) => {
       if (!item.type) item.type = 'memo';
       if (!item.updatedAt) item.updatedAt = item.createdAt || now;
@@ -115,6 +116,7 @@ function migrateData(raw) {
   return {
     activeMemoId: id,
     memoOrder: [id],
+    deletedMemos: {},
     memos: {
       [id]: {
         id,
@@ -140,6 +142,7 @@ function loadAppState() {
     activeMemoId: id,
     memoOrder: [id],
     memos: { [id]: createEmptyMemo(id) },
+    deletedMemos: {},
   };
 }
 
@@ -845,6 +848,9 @@ function closeDeleteModal() {
 
 function deleteMemo(memoId) {
   if (appState.memoOrder.length <= 1 || !appState.memos[memoId]) return;
+
+  if (!appState.deletedMemos) appState.deletedMemos = {};
+  appState.deletedMemos[memoId] = new Date().toISOString();
 
   const orderIndex = appState.memoOrder.indexOf(memoId);
   delete appState.memos[memoId];

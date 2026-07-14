@@ -2,11 +2,41 @@ function ts(value) {
   return new Date(value || 0).getTime() || 0;
 }
 
+function mergeDeletedMemos(local, remote) {
+  const ids = new Set([
+    ...Object.keys(local?.deletedMemos || {}),
+    ...Object.keys(remote?.deletedMemos || {}),
+  ]);
+  const merged = {};
+  ids.forEach((id) => {
+    const left = local?.deletedMemos?.[id];
+    const right = remote?.deletedMemos?.[id];
+    if (!left) {
+      merged[id] = right;
+      return;
+    }
+    if (!right) {
+      merged[id] = left;
+      return;
+    }
+    merged[id] = ts(right) >= ts(left) ? right : left;
+  });
+  return merged;
+}
+
+function isMemoDeleted(memoId, deletedMemos, memo) {
+  const deletedAt = deletedMemos?.[memoId];
+  if (!deletedAt) return false;
+  if (!memo) return true;
+  return ts(deletedAt) >= ts(memo.updatedAt || memo.createdAt);
+}
+
 function mergeAppStates(local, remote) {
   if (!remote?.memos) return local;
   if (!local?.memos) return remote;
 
-  const mergedMemos = { ...local.memos };
+  const deletedMemos = mergeDeletedMemos(local, remote);
+  const mergedMemos = {};
   const ids = new Set([
     ...Object.keys(local.memos || {}),
     ...Object.keys(remote.memos || {}),
@@ -15,22 +45,31 @@ function mergeAppStates(local, remote) {
   ids.forEach((id) => {
     const left = local.memos[id];
     const right = remote.memos[id];
-    if (!left) {
-      mergedMemos[id] = right;
-      return;
+    let winner = null;
+
+    if (left && right) {
+      winner = ts(right.updatedAt || right.createdAt) >= ts(left.updatedAt || left.createdAt)
+        ? right
+        : left;
+    } else if (left) {
+      winner = left;
+    } else if (right) {
+      winner = right;
     }
-    if (!right) return;
-    mergedMemos[id] = ts(right.updatedAt || right.createdAt) >= ts(left.updatedAt || left.createdAt)
-      ? right
-      : left;
+
+    if (!winner || isMemoDeleted(id, deletedMemos, winner)) return;
+    mergedMemos[id] = winner;
   });
 
   const localNewer = ts(local.updatedAt) >= ts(remote.updatedAt);
-  const primary = localNewer ? local.memoOrder || [] : remote.memoOrder || [];
-  const secondary = localNewer ? remote.memoOrder || [] : local.memoOrder || [];
-  const mergedOrder = [...primary];
+  const primary = (localNewer ? local.memoOrder : remote.memoOrder) || [];
+  const secondary = (localNewer ? remote.memoOrder : local.memoOrder) || [];
+  const mergedOrder = primary.filter((id) => mergedMemos[id]);
   secondary.forEach((id) => {
     if (mergedMemos[id] && !mergedOrder.includes(id)) mergedOrder.push(id);
+  });
+  Object.keys(mergedMemos).forEach((id) => {
+    if (!mergedOrder.includes(id)) mergedOrder.push(id);
   });
 
   let activeMemoId = local.activeMemoId;
@@ -41,7 +80,8 @@ function mergeAppStates(local, remote) {
   return {
     ...local,
     memos: mergedMemos,
-    memoOrder: mergedOrder.length ? mergedOrder : local.memoOrder,
+    deletedMemos,
+    memoOrder: mergedOrder.length ? mergedOrder : Object.keys(mergedMemos),
     activeMemoId,
     updatedAt: new Date().toISOString(),
   };
