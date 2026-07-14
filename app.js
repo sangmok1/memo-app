@@ -795,13 +795,14 @@ function applyMemoColor(memo) {
     const top = Math.min(98, paper + 3);
     const bottom = Math.max(4, paper - 4);
     postitEl.dataset.colorMode = 'gray';
-    postitEl.style.setProperty('--gray-light', paper);
-    postitEl.style.setProperty('--gray-light-top', top);
-    postitEl.style.setProperty('--gray-light-bottom', bottom);
+    postitEl.style.backgroundColor = `hsl(0, 0%, ${paper}%)`;
+    postitEl.style.background = `linear-gradient(165deg, hsl(0, 0%, ${top}%) 0%, hsl(0, 0%, ${paper}%) 48%, hsl(0, 0%, ${bottom}%) 100%)`;
     postitEl.classList.toggle('postit-gray-dark', paper < 52);
     postitEl.classList.toggle('postit-gray-light', paper >= 52);
   } else {
     delete postitEl.dataset.colorMode;
+    postitEl.style.removeProperty('background');
+    postitEl.style.removeProperty('background-color');
     postitEl.style.setProperty('--hue', color.hue);
     document.documentElement.style.setProperty('--hue', color.hue);
     postitEl.classList.remove('postit-gray-dark', 'postit-gray-light');

@@ -157,13 +157,7 @@ body {
 }
 
 .postit[data-color-mode="gray"] {
-  background-color: hsl(0, 0%, var(--gray-light));
-  background-image: linear-gradient(
-    165deg,
-    hsl(0, 0%, var(--gray-light-top)) 0%,
-    hsl(0, 0%, var(--gray-light)) 48%,
-    hsl(0, 0%, var(--gray-light-bottom)) 100%
-  );
+  /* 배경색은 applyMemoColor()가 인라인으로 지정 (hsl+var는 Electron에서 깨짐) */
   box-shadow:
     2px 4px 14px rgba(0, 0, 0, 0.24),
     inset 0 1px 0 rgba(255, 255, 255, 0.22);
