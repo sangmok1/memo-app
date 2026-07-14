@@ -157,21 +157,50 @@ body {
 }
 
 .postit[data-color-mode="gray"] {
-  background: linear-gradient(
-    145deg,
-    hsl(0, 0%, calc(var(--gray-light) + 6%)) 0%,
-    hsl(0, 0%, var(--gray-light)) 50%,
-    hsl(0, 0%, calc(var(--gray-light) - 8%)) 100%
+  background-color: hsl(0, 0%, var(--gray-light));
+  background-image: linear-gradient(
+    165deg,
+    hsl(0, 0%, var(--gray-light-top)) 0%,
+    hsl(0, 0%, var(--gray-light)) 48%,
+    hsl(0, 0%, var(--gray-light-bottom)) 100%
   );
   box-shadow:
-    2px 4px 12px rgba(0, 0, 0, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    2px 4px 14px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.postit.postit-gray-light {
+  color: rgba(0, 0, 0, 0.86);
+}
+
+.postit.postit-gray-light .section-header h2,
+.postit.postit-gray-light .date,
+.postit.postit-gray-light .todo-text,
+.postit.postit-gray-light .btn-add,
+.postit.postit-gray-light .setting-row,
+.postit.postit-gray-light .btn-archive-link,
+.postit.postit-gray-light .sync-status,
+.postit.postit-gray-light .btn-summary,
+.postit.postit-gray-light .btn-delete-memo,
+.postit.postit-gray-light .color-label,
+.postit.postit-gray-light .find-count,
+.postit.postit-gray-light .alarm-item-title,
+.postit.postit-gray-light .alarm-item-meta,
+.postit.postit-gray-light .alarm-item-content {
+  color: rgba(0, 0, 0, 0.86);
+}
+
+.postit.postit-gray-light .todo-text.wrap.is-empty:not(:focus)::before,
+.postit.postit-gray-light .sync-hint,
+.postit.postit-gray-light .settings-archive-sep {
+  color: rgba(0, 0, 0, 0.32);
 }
 
 .postit.postit-gray-dark {
+  color: rgba(255, 255, 255, 0.92);
   box-shadow:
-    2px 4px 12px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    2px 4px 14px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .postit.postit-gray-dark .color-label,
@@ -212,8 +241,12 @@ body {
   border-color: rgba(255, 255, 255, 0.12);
 }
 
-.postit.postit-gray-dark .memo-sidebar {
-  background: rgba(255, 255, 255, 0.08);
+.postit.postit-gray-dark .todo-item input[type="checkbox"] {
+  accent-color: rgba(255, 255, 255, 0.85);
+}
+
+.postit.postit-gray-light .todo-item input[type="checkbox"] {
+  accent-color: rgba(0, 0, 0, 0.65);
 }
 
 .titlebar {
@@ -446,21 +479,29 @@ body {
   line-height: 1.35;
 }
 
-.sync-group-select {
+.postit.postit-gray-dark .memo-sidebar {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sync-key-select {
   flex: 1;
   min-width: 0;
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 5px;
   padding: 2px 4px;
   font-size: 10px;
-  font-family: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   background: rgba(255, 255, 255, 0.85);
   color: rgba(0, 0, 0, 0.75);
 }
 
-#default-sync-group-row,
-#memo-sync-group-row {
-  margin-top: 4px;
+#memo-sync-key-row {
+  margin-top: 2px;
+}
+
+.btn-archive-link:disabled {
+  opacity: 0.35;
+  pointer-events: none;
 }
 
 .settings-archive-sep {

@@ -7,6 +7,7 @@ const {
   applyGroupMergeToFull,
   assignOrphanMemosToGroup,
   normalizeSyncConfig,
+  syncGroupKeyLabel,
 } = require('./sync-groups');
 
 app.setName('Memos');
@@ -607,7 +608,7 @@ async function syncAllGroups(appState) {
     config.syncGroups.push({
       id: 'sg-default',
       key: '',
-      name: '그룹 1',
+      name: syncGroupKeyLabel(''),
       createdAt: new Date().toISOString(),
     });
   }
@@ -620,11 +621,14 @@ async function syncAllGroups(appState) {
     if (!memo.syncGroupId) memo.syncGroupId = primaryGroupId;
   });
 
-  for (const group of config.syncGroups) {
+  for (const group of config.syncGroups.filter((g) => g.key)) {
     const result = await syncOneGroup(fullState, group, defaultGroupId);
     fullState = applyGroupMergeToFull(fullState, group.id, result.mergedSubset, defaultGroupId);
     group.key = result.key;
+    group.name = syncGroupKeyLabel(result.key);
   }
+
+  config.syncGroups = config.syncGroups.map((g) => ({ ...g, name: syncGroupKeyLabel(g.key) }));
 
   config.syncKey = config.syncGroups[0]?.key || config.syncKey || '';
   config.lastSyncKey = config.syncKey;
@@ -658,7 +662,7 @@ async function createSyncGroup(name) {
   const group = {
     id: `sg-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
     key: pushResult.key,
-    name: name || `그룹 ${config.syncGroups.length + 1}`,
+    name: syncGroupKeyLabel(pushResult.key),
     createdAt: new Date().toISOString(),
   };
   config.syncGroups.push(group);
@@ -683,7 +687,7 @@ async function connectSyncGroup(appState, key) {
       group = {
         id: `sg-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
         key,
-        name: `그룹 ${config.syncGroups.length + 1}`,
+        name: syncGroupKeyLabel(key),
         createdAt: new Date().toISOString(),
       };
       config.syncGroups.push(group);
@@ -727,6 +731,18 @@ ipcMain.handle('sync-merge', (_, appState) => syncAllGroups(appState));
 ipcMain.handle('sync-export', (_, appState, existingKey) => syncExportToCloud(appState, existingKey));
 ipcMain.handle('sync-import', (_, appState, key) => syncImportFromCloud(appState, key));
 ipcMain.handle('create-sync-group', (_, name) => createSyncGroup(name));
+ipcMain.handle('delete-sync-group', (_, groupId) => {
+  const config = normalizeSyncConfig(loadConfig());
+  if (config.syncGroups.length <= 1) throw new Error('last_sync_key');
+  const idx = config.syncGroups.findIndex((g) => g.id === groupId);
+  if (idx === -1) throw new Error('group_not_found');
+  config.syncGroups.splice(idx, 1);
+  if (config.defaultSyncGroupId === groupId) {
+    config.defaultSyncGroupId = config.syncGroups[0].id;
+  }
+  saveConfig(config);
+  return getSyncConfigPayload();
+});
 ipcMain.handle('set-sync-settings', (_, settings) => {
   const config = normalizeSyncConfig(loadConfig());
   if (typeof settings.syncEnabled === 'boolean') config.syncEnabled = settings.syncEnabled;

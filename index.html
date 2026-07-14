@@ -57,21 +57,19 @@
           <input type="checkbox" id="sync-enabled">
           클라우드 동기화
         </label>
+        <label class="setting-row hidden" id="memo-sync-key-row">
+          <span>이 메모 키</span>
+          <select id="memo-sync-key" class="sync-key-select"></select>
+        </label>
         <div class="settings-sync-row hidden" id="sync-detail-row">
-          <button class="btn-archive-link" id="btn-sync-show-key">동기화 키</button>
+          <button class="btn-archive-link" id="btn-sync-new-key">+ 새 키</button>
           <span class="settings-archive-sep">·</span>
-          <button class="btn-archive-link" id="btn-sync-connect">다른 기기 연결</button>
+          <button class="btn-archive-link" id="btn-sync-connect">연결</button>
           <span class="settings-archive-sep">·</span>
-          <button class="btn-archive-link" id="btn-sync-new-group">새 그룹</button>
+          <button class="btn-archive-link" id="btn-sync-show-key">키 복사</button>
+          <span class="settings-archive-sep">·</span>
+          <button class="btn-archive-link" id="btn-sync-delete-key">키 삭제</button>
         </div>
-        <label class="setting-row hidden" id="default-sync-group-row">
-          <span>새 메모 그룹</span>
-          <select id="default-sync-group" class="sync-group-select"></select>
-        </label>
-        <label class="setting-row hidden" id="memo-sync-group-row">
-          <span>이 메모 그룹</span>
-          <select id="memo-sync-group" class="sync-group-select"></select>
-        </label>
         <p class="sync-status hidden" id="sync-status"></p>
       </div>
       <button class="btn-delete-memo" id="btn-delete-memo">이 메모 삭제</button>

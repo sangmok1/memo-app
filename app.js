@@ -88,7 +88,7 @@ function createEmptyMemo(id, syncGroupId) {
     savedDate: getDateKey(getKSTDate()),
     colorHue: 54,
     colorMode: 'hue',
-    colorGray: 88,
+    colorGray: 94,
     autoWrap: true,
   };
 }
@@ -139,7 +139,7 @@ function migrateData(raw) {
         item.autoWrap = true;
       }
       if (!item.colorMode) item.colorMode = 'hue';
-      if (item.colorGray === undefined) item.colorGray = item.type === 'alarm' ? 35 : 88;
+      if (item.colorGray === undefined) item.colorGray = item.type === 'alarm' ? 30 : 94;
     });
     return raw;
   }
@@ -770,12 +770,16 @@ function addItem(listType, depth = 0) {
   focusItemInput(listType, getListByType(listType).length - 1);
 }
 
+function clampPaperGray(value) {
+  return Math.max(6, Math.min(96, Number(value) || 94));
+}
+
 function getMemoColorState(memo) {
   const isAlarm = isAlarmBoard(memo);
   if ((memo.colorMode || 'hue') === 'gray') {
     return {
       mode: 'gray',
-      gray: memo.colorGray ?? (isAlarm ? 35 : 88),
+      gray: clampPaperGray(memo.colorGray ?? (isAlarm ? 30 : 94)),
     };
   }
   return {
@@ -787,15 +791,20 @@ function getMemoColorState(memo) {
 function applyMemoColor(memo) {
   const color = getMemoColorState(memo);
   if (color.mode === 'gray') {
+    const paper = color.gray;
+    const top = Math.min(98, paper + 3);
+    const bottom = Math.max(4, paper - 4);
     postitEl.dataset.colorMode = 'gray';
-    postitEl.style.setProperty('--gray-light', color.gray);
-    document.documentElement.style.setProperty('--gray-light', color.gray);
-    postitEl.classList.toggle('postit-gray-dark', color.gray < 42);
+    postitEl.style.setProperty('--gray-light', paper);
+    postitEl.style.setProperty('--gray-light-top', top);
+    postitEl.style.setProperty('--gray-light-bottom', bottom);
+    postitEl.classList.toggle('postit-gray-dark', paper < 52);
+    postitEl.classList.toggle('postit-gray-light', paper >= 52);
   } else {
     delete postitEl.dataset.colorMode;
     postitEl.style.setProperty('--hue', color.hue);
     document.documentElement.style.setProperty('--hue', color.hue);
-    postitEl.classList.remove('postit-gray-dark');
+    postitEl.classList.remove('postit-gray-dark', 'postit-gray-light');
   }
 }
 
@@ -821,7 +830,7 @@ function updateColorSliderUI(memo) {
     colorSlider.value = String(color.gray);
     colorSlider.classList.add('color-slider-gray');
     if (colorLabel) {
-      colorLabel.textContent = isAlarmBoard(memo) ? '알람 밝기' : '메모 밝기';
+      colorLabel.textContent = isAlarmBoard(memo) ? '알람지 색' : '메모지 색';
     }
   } else {
     colorSlider.min = '0';
@@ -850,7 +859,7 @@ function toggleColorModeEasterEgg() {
   if ((currentMemo.colorMode || 'hue') === 'hue') {
     currentMemo.colorMode = 'gray';
     if (currentMemo.colorGray === undefined) {
-      currentMemo.colorGray = isAlarmBoard(currentMemo) ? 35 : 88;
+      currentMemo.colorGray = isAlarmBoard(currentMemo) ? 30 : 94;
     }
   } else {
     currentMemo.colorMode = 'hue';
@@ -879,7 +888,7 @@ function renderMemoSidebar() {
     let tabTitle = appState.memoOrder.length > 1
       ? `${isAlarm ? '알람' : '메모'} · ${item.id}\n클릭: 전환 · 우클릭: 삭제`
       : item.id;
-    if (syncMeta) tabTitle += `\n☁ ${syncMeta.group.name}`;
+    if (syncMeta) tabTitle += `\n☁ ${syncKeyLabel(syncMeta.group.key)}`;
     btn.title = tabTitle;
     if (isAlarm) {
       btn.appendChild(createBellSvg(item.colorHue ?? 200, 16));
@@ -919,8 +928,8 @@ function updateSettingsForType() {
   if (archiveRow) archiveRow.style.display = isAlarm ? 'none' : '';
   const syncBlock = document.getElementById('sync-settings-block');
   if (syncBlock) syncBlock.style.display = isAlarm ? 'none' : '';
-  const memoSyncGroupRow = document.getElementById('memo-sync-group-row');
-  if (memoSyncGroupRow) memoSyncGroupRow.style.display = isAlarm ? 'none' : '';
+  const memoSyncKeyRow = document.getElementById('memo-sync-key-row');
+  if (memoSyncKeyRow) memoSyncKeyRow.style.display = isAlarm ? 'none' : '';
   const btnArchiveReport = document.getElementById('btn-archive-report');
   if (btnArchiveReport) btnArchiveReport.style.display = isAlarm ? 'none' : '';
   const autoWrapRow = document.getElementById('auto-wrap-row');
@@ -953,7 +962,7 @@ function refreshActiveUI() {
     renderAllLists();
   }
   renderMemoSidebar();
-  if (syncConfigCache.syncGroups?.length) renderSyncGroupSelects();
+  if (syncConfigCache.syncGroups?.length) renderSyncKeySelect();
 }
 
 function promptDeleteMemo(memoId) {
@@ -1387,10 +1396,9 @@ const syncEnabledEl = document.getElementById('sync-enabled');
 const syncDetailRow = document.getElementById('sync-detail-row');
 const syncStatusEl = document.getElementById('sync-status');
 const syncSettingsBlock = document.getElementById('sync-settings-block');
-const defaultSyncGroupRow = document.getElementById('default-sync-group-row');
-const memoSyncGroupRow = document.getElementById('memo-sync-group-row');
-const defaultSyncGroupEl = document.getElementById('default-sync-group');
-const memoSyncGroupEl = document.getElementById('memo-sync-group');
+const memoSyncKeyRow = document.getElementById('memo-sync-key-row');
+const memoSyncKeyEl = document.getElementById('memo-sync-key');
+const btnSyncDeleteKey = document.getElementById('btn-sync-delete-key');
 let syncModalMode = 'key';
 let syncDebounceTimer = null;
 let syncInFlight = false;
@@ -1415,28 +1423,46 @@ function updateSyncDetailVisibility(enabled) {
   if (!syncDetailRow || !syncStatusEl) return;
   syncDetailRow.classList.toggle('hidden', !enabled);
   syncStatusEl.classList.toggle('hidden', !enabled);
-  defaultSyncGroupRow?.classList.toggle('hidden', !enabled);
-  memoSyncGroupRow?.classList.toggle('hidden', !enabled);
+  memoSyncKeyRow?.classList.toggle('hidden', !enabled);
 }
 
-function renderSyncGroupSelects() {
-  const groups = syncConfigCache.syncGroups || [];
-  const fill = (selectEl, selectedId) => {
-    if (!selectEl) return;
-    selectEl.innerHTML = '';
-    groups.forEach((g) => {
-      const opt = document.createElement('option');
-      opt.value = g.id;
-      opt.textContent = g.name;
-      selectEl.appendChild(opt);
-    });
-    if (selectedId && groups.some((g) => g.id === selectedId)) {
-      selectEl.value = selectedId;
-    }
-  };
-  fill(defaultSyncGroupEl, syncConfigCache.defaultSyncGroupId || getDefaultSyncGroupId());
+function countMemosForSyncKey(groupId) {
+  const fallback = syncConfigCache.defaultSyncGroupId || syncConfigCache.syncGroups?.[0]?.id;
+  return Object.values(appState.memos).filter((m) => {
+    if (isAlarmBoard(m)) return false;
+    return (m.syncGroupId || fallback) === groupId;
+  }).length;
+}
+
+function syncKeyLabel(key) {
+  if (!key) return '키 없음';
+  return key.length > 8 ? `···${key.slice(-8)}` : key;
+}
+
+function formatSyncKeyOption(group) {
+  return `${syncKeyLabel(group.key)} · 메모 ${countMemosForSyncKey(group.id)}개`;
+}
+
+function renderSyncKeySelect() {
+  if (!memoSyncKeyEl) return;
+  const groups = (syncConfigCache.syncGroups || []).filter((g) => g.key);
+  memoSyncKeyEl.innerHTML = '';
+  groups.forEach((g) => {
+    const opt = document.createElement('option');
+    opt.value = g.id;
+    opt.textContent = formatSyncKeyOption(g);
+    memoSyncKeyEl.appendChild(opt);
+  });
   if (currentMemo && !isAlarmBoard(currentMemo)) {
-    fill(memoSyncGroupEl, currentMemo.syncGroupId || getDefaultSyncGroupId());
+    const selected = currentMemo.syncGroupId || getDefaultSyncGroupId();
+    if (groups.some((g) => g.id === selected)) {
+      memoSyncKeyEl.value = selected;
+    } else if (groups[0]) {
+      memoSyncKeyEl.value = groups[0].id;
+    }
+  }
+  if (btnSyncDeleteKey) {
+    btnSyncDeleteKey.disabled = groups.length <= 1;
   }
 }
 
@@ -1454,12 +1480,12 @@ async function updateSyncStatusUI() {
     return;
   }
   updateSyncDetailVisibility(true);
-  renderSyncGroupSelects();
-  const groupCount = config.syncGroups?.length || 0;
+  renderSyncKeySelect();
+  const keyCount = (config.syncGroups || []).filter((g) => g.key).length;
   const when = formatSyncTime(config.lastSyncAt);
-  const groupHint = groupCount > 1 ? ` · ${groupCount}개 그룹` : '';
+  const keyHint = keyCount > 1 ? ` · 키 ${keyCount}개` : '';
   syncStatusEl.textContent = when
-    ? `마지막 동기화: ${when}${groupHint} · 저장·3시간·날짜 변경 시 자동 연동`
+    ? `마지막 동기화: ${when}${keyHint} · 같은 키끼리만 맞춰짐`
     : '동기화 대기 중…';
 }
 
@@ -1497,7 +1523,7 @@ async function runCloudSync() {
       refreshActiveUI();
     }
     await refreshSyncConfigCache();
-    renderSyncGroupSelects();
+    renderSyncKeySelect();
     await updateSyncStatusUI();
   } catch (err) {
     console.error('cloud sync failed', err);
@@ -1520,20 +1546,20 @@ function openSyncModal(mode) {
 
   if (mode === 'key') {
     syncModalTitle.textContent = '동기화 키';
-    syncModalMessage.textContent = '이 키는 선택한 그룹 전용입니다. 같은 키를 쓰는 기기끼리만 해당 메모가 맞춰집니다.';
+    syncModalMessage.textContent = '아래 키 전체를 다른 기기에 입력하세요. 같은 키를 쓰는 메모끼리만 맞춰집니다.';
     syncKeyInput.readOnly = true;
-    syncHint.textContent = '다른 그룹 메모는 이 키로 공유되지 않습니다.';
+    syncHint.textContent = '목록에는 키 뒷자리만 보이지만, 복사되는 건 전체 키입니다.';
   } else if (mode === 'new-group') {
-    syncModalTitle.textContent = '새 동기화 그룹';
-    syncModalMessage.textContent = '새 그룹이 만들어졌습니다. 이 키를 C에게 전달하세요. A와는 별도로 동기화됩니다.';
+    syncModalTitle.textContent = '새 동기화 키';
+    syncModalMessage.textContent = '새 키가 만들어졌습니다. C에게 전달하세요. A와는 별도로 동기화됩니다.';
     syncKeyInput.readOnly = true;
-    syncHint.textContent = '앞으로 새로 만드는 메모는 이 그룹에 들어갑니다. 기존 메모는 설정에서 그룹을 바꿀 수 있습니다.';
+    syncHint.textContent = '이 메모부터 이 키를 씁니다. 다른 메모는 「이 메모 키」에서 바꿀 수 있습니다.';
   } else {
-    syncModalTitle.textContent = '다른 기기 연결 (새 그룹)';
-    syncModalMessage.textContent = '키를 입력하면 새 그룹으로 추가됩니다. 기존 A-B 그룹과는 별도로 동기화됩니다.';
+    syncModalTitle.textContent = '다른 기기 연결';
+    syncModalMessage.textContent = '받은 동기화 키를 입력하세요. 목록에 키 뒷자리가 추가됩니다.';
     syncKeyInput.readOnly = false;
     syncKeyInput.value = '';
-    syncHint.textContent = '처음 연결할 때만 기존 로컬 메모 전체가 그 그룹으로 들어갑니다.';
+    syncHint.textContent = '같은 키를 쓰는 메모끼리만 자동으로 맞춰집니다.';
     syncKeyInput.focus();
   }
 }
@@ -1548,6 +1574,8 @@ function getSyncErrorMessage(code) {
     invalid_key: '키 형식이 올바르지 않습니다.',
     not_found: '해당 키의 데이터를 찾을 수 없습니다.',
     too_large: '메모 데이터가 너무 큽니다 (8MB 이하).',
+    last_sync_key: '키는 최소 1개는 남겨 두세요.',
+    group_not_found: '키를 찾을 수 없습니다.',
   })[code] || `동기화 오류: ${code}`;
 }
 
@@ -1556,7 +1584,7 @@ async function handleSyncShowKey() {
   try {
     await runCloudSync();
     await refreshSyncConfigCache();
-    const groupId = defaultSyncGroupEl?.value || getDefaultSyncGroupId();
+    const groupId = memoSyncKeyEl?.value || getDefaultSyncGroupId();
     syncKeyInput.value = getSyncGroupKey(groupId);
     openSyncModal('key');
   } catch (err) {
@@ -1564,16 +1592,50 @@ async function handleSyncShowKey() {
   }
 }
 
-async function handleSyncNewGroup() {
+async function handleSyncNewKey() {
   if (!window.electronAPI?.createSyncGroup) return;
   try {
     const group = await window.electronAPI.createSyncGroup();
     if (syncEnabledEl) syncEnabledEl.checked = true;
     updateSyncDetailVisibility(true);
+    if (currentMemo && !isAlarmBoard(currentMemo)) {
+      currentMemo.syncGroupId = group.id;
+      saveAppState({ skipSync: true });
+    }
+    await window.electronAPI.setSyncSettings({ defaultSyncGroupId: group.id });
     await refreshSyncConfigCache();
-    renderSyncGroupSelects();
+    renderSyncKeySelect();
     syncKeyInput.value = group.key;
     openSyncModal('new-group');
+    await updateSyncStatusUI();
+    renderMemoSidebar();
+  } catch (err) {
+    alert(getSyncErrorMessage(err.message));
+  }
+}
+
+async function handleSyncDeleteKey() {
+  const groupId = memoSyncKeyEl?.value;
+  if (!groupId || !window.electronAPI?.deleteSyncGroup) return;
+  const label = syncKeyLabel(getSyncGroupKey(groupId));
+  if (!confirm(`「${label}」 키를 삭제할까요?\n이 키를 쓰던 메모는 다른 키로 옮겨집니다.`)) return;
+
+  try {
+    await refreshSyncConfigCache();
+    const fallback = syncConfigCache.syncGroups.find((g) => g.id !== groupId);
+    if (!fallback) {
+      alert(getSyncErrorMessage('last_sync_key'));
+      return;
+    }
+    Object.values(appState.memos).forEach((memo) => {
+      if ((memo.syncGroupId || getDefaultSyncGroupId()) === groupId) {
+        memo.syncGroupId = fallback.id;
+      }
+    });
+    await window.electronAPI.deleteSyncGroup(groupId);
+    saveAppState({ skipSync: true });
+    await refreshSyncConfigCache();
+    refreshActiveUI();
     await updateSyncStatusUI();
   } catch (err) {
     alert(getSyncErrorMessage(err.message));
@@ -1599,7 +1661,7 @@ async function handleSyncConnectConfirm() {
     closeSyncModal();
     refreshActiveUI();
     await updateSyncStatusUI();
-    alert('새 그룹으로 연결했습니다. 이 키의 메모만 이 그룹과 동기화됩니다.');
+    alert(`연결했습니다. (···${key.slice(-8)})`);
   } catch (err) {
     alert(getSyncErrorMessage(err.message));
   }
@@ -1615,21 +1677,19 @@ async function initSyncSettings() {
   syncConfigCache = config;
   syncEnabledEl.checked = Boolean(config.syncEnabled);
   updateSyncDetailVisibility(config.syncEnabled);
-  renderSyncGroupSelects();
+  renderSyncKeySelect();
   await updateSyncStatusUI();
 
-  defaultSyncGroupEl?.addEventListener('change', async () => {
+  memoSyncKeyEl?.addEventListener('change', async () => {
+    if (!currentMemo || isAlarmBoard(currentMemo)) return;
+    const groupId = memoSyncKeyEl.value;
+    currentMemo.syncGroupId = groupId;
     try {
-      await window.electronAPI.setSyncSettings({ defaultSyncGroupId: defaultSyncGroupEl.value });
+      await window.electronAPI.setSyncSettings({ defaultSyncGroupId: groupId });
       await refreshSyncConfigCache();
     } catch (err) {
       alert(getSyncErrorMessage(err.message));
     }
-  });
-
-  memoSyncGroupEl?.addEventListener('change', () => {
-    if (!currentMemo || isAlarmBoard(currentMemo)) return;
-    currentMemo.syncGroupId = memoSyncGroupEl.value;
     saveData();
     renderMemoSidebar();
   });
@@ -1642,11 +1702,11 @@ async function initSyncSettings() {
       renderMemoSidebar();
       if (enabled) {
         await runCloudSync();
-        const updated = await window.electronAPI.getSyncConfig();
-        if (updated.syncKey) {
-          syncKeyInput.value = updated.syncKey;
-          openSyncModal('key');
-        }
+        await refreshSyncConfigCache();
+        renderSyncKeySelect();
+        const groupId = memoSyncKeyEl?.value || getDefaultSyncGroupId();
+        syncKeyInput.value = getSyncGroupKey(groupId);
+        if (syncKeyInput.value) openSyncModal('key');
       }
       await updateSyncStatusUI();
     } catch (err) {
@@ -1658,7 +1718,7 @@ async function initSyncSettings() {
 
 const btnSyncShowKey = document.getElementById('btn-sync-show-key');
 const btnSyncConnect = document.getElementById('btn-sync-connect');
-const btnSyncNewGroup = document.getElementById('btn-sync-new-group');
+const btnSyncNewKey = document.getElementById('btn-sync-new-key');
 if (btnSyncShowKey && window.electronAPI?.syncMerge) {
   btnSyncShowKey.addEventListener('click', handleSyncShowKey);
 } else if (btnSyncShowKey) {
@@ -1669,10 +1729,15 @@ if (btnSyncConnect && window.electronAPI?.syncImport) {
 } else if (btnSyncConnect) {
   btnSyncConnect.style.display = 'none';
 }
-if (btnSyncNewGroup && window.electronAPI?.createSyncGroup) {
-  btnSyncNewGroup.addEventListener('click', handleSyncNewGroup);
-} else if (btnSyncNewGroup) {
-  btnSyncNewGroup.style.display = 'none';
+if (btnSyncNewKey && window.electronAPI?.createSyncGroup) {
+  btnSyncNewKey.addEventListener('click', handleSyncNewKey);
+} else if (btnSyncNewKey) {
+  btnSyncNewKey.style.display = 'none';
+}
+if (btnSyncDeleteKey && window.electronAPI?.deleteSyncGroup) {
+  btnSyncDeleteKey.addEventListener('click', handleSyncDeleteKey);
+} else if (btnSyncDeleteKey) {
+  btnSyncDeleteKey.style.display = 'none';
 }
 
 document.getElementById('btn-sync-close')?.addEventListener('click', closeSyncModal);

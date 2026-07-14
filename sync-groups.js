@@ -68,6 +68,11 @@ function assignOrphanMemosToGroup(appState, groupId) {
   });
 }
 
+function syncGroupKeyLabel(key) {
+  if (!key) return '키 없음';
+  return key.length > 8 ? `···${key.slice(-8)}` : key;
+}
+
 function normalizeSyncConfig(config) {
   const c = { ...config };
   if (!Array.isArray(c.syncGroups) || !c.syncGroups.length) {
@@ -75,10 +80,14 @@ function normalizeSyncConfig(config) {
     c.syncGroups = [{
       id: 'sg-default',
       key,
-      name: '그룹 1',
+      name: syncGroupKeyLabel(key),
       createdAt: c.lastSyncAt || new Date().toISOString(),
     }];
   }
+  c.syncGroups = c.syncGroups.map((g) => ({
+    ...g,
+    name: syncGroupKeyLabel(g.key),
+  }));
   if (!c.defaultSyncGroupId) {
     c.defaultSyncGroupId = c.syncGroups[0].id;
   }
@@ -90,4 +99,5 @@ module.exports = {
   applyGroupMergeToFull,
   assignOrphanMemosToGroup,
   normalizeSyncConfig,
+  syncGroupKeyLabel,
 };
