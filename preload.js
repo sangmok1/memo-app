@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setLoginSettings: (enabled) => ipcRenderer.invoke('set-login-settings', enabled),
   syncMerge: (appState) => ipcRenderer.invoke('sync-merge', appState),
   syncImport: (appState, key) => ipcRenderer.invoke('sync-import', appState, key),
+  createSyncGroup: (name) => ipcRenderer.invoke('create-sync-group', name),
   setSyncSettings: (settings) => ipcRenderer.invoke('set-sync-settings', settings),
   getSyncConfig: () => ipcRenderer.invoke('get-sync-config'),
 });

@@ -59,6 +59,38 @@ body {
   cursor: pointer;
   flex-shrink: 0;
   transition: transform 0.12s, border-color 0.12s;
+  position: relative;
+}
+
+.memo-tab.sync-tab {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.45),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.memo-tab.sync-tab::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
+.memo-tab.sync-tab.sync-g0::after { background: rgba(255, 255, 255, 0.95); }
+.memo-tab.sync-tab.sync-g1::after { background: #5b9cf6; }
+.memo-tab.sync-tab.sync-g2::after { background: #6bcf7f; }
+.memo-tab.sync-tab.sync-g3::after { background: #f0a050; }
+.memo-tab.sync-tab.sync-g4::after { background: #c77dff; }
+.memo-tab.sync-tab.sync-g5::after { background: #ff6b8a; }
+
+.memo-tab.sync-tab.active::after {
+  border-color: rgba(255, 255, 255, 1);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.22);
 }
 
 .memo-tab:hover {
@@ -108,6 +140,7 @@ body {
   min-width: 0;
   height: 100vh;
   --hue: 54;
+  --gray-light: 88;
   background: linear-gradient(
     145deg,
     hsl(var(--hue), 80%, 88%) 0%,
@@ -121,6 +154,66 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.postit[data-color-mode="gray"] {
+  background: linear-gradient(
+    145deg,
+    hsl(0, 0%, calc(var(--gray-light) + 6%)) 0%,
+    hsl(0, 0%, var(--gray-light)) 50%,
+    hsl(0, 0%, calc(var(--gray-light) - 8%)) 100%
+  );
+  box-shadow:
+    2px 4px 12px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.postit.postit-gray-dark {
+  box-shadow:
+    2px 4px 12px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.postit.postit-gray-dark .color-label,
+.postit.postit-gray-dark .section-header h2,
+.postit.postit-gray-dark .date,
+.postit.postit-gray-dark .todo-text,
+.postit.postit-gray-dark .btn-add,
+.postit.postit-gray-dark .setting-row,
+.postit.postit-gray-dark .btn-archive-link,
+.postit.postit-gray-dark .sync-status,
+.postit.postit-gray-dark .btn-summary,
+.postit.postit-gray-dark .btn-delete-memo,
+.postit.postit-gray-dark .find-count,
+.postit.postit-gray-dark .alarm-item-title,
+.postit.postit-gray-dark .alarm-item-meta,
+.postit.postit-gray-dark .alarm-item-content {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.postit.postit-gray-dark .todo-text.wrap.is-empty:not(:focus)::before,
+.postit.postit-gray-dark .setting-row,
+.postit.postit-gray-dark .sync-hint,
+.postit.postit-gray-dark .settings-archive-sep {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.postit.postit-gray-dark .btn-icon,
+.postit.postit-gray-dark .find-btn,
+.postit.postit-gray-dark .find-input {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.postit.postit-gray-dark .find-bar,
+.postit.postit-gray-dark .settings-panel,
+.postit.postit-gray-dark .divider {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.postit.postit-gray-dark .memo-sidebar {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .titlebar {
@@ -266,6 +359,8 @@ body {
   font-weight: 600;
   color: rgba(0, 0, 0, 0.45);
   letter-spacing: -0.2px;
+  cursor: default;
+  user-select: none;
 }
 
 .color-slider {
@@ -286,6 +381,10 @@ body {
   );
   outline: none;
   cursor: pointer;
+}
+
+.color-slider.color-slider-gray {
+  background: linear-gradient(to right, #111, #fff);
 }
 
 .color-slider::-webkit-slider-thumb {
@@ -345,6 +444,23 @@ body {
   font-size: 10px;
   color: rgba(0, 0, 0, 0.45);
   line-height: 1.35;
+}
+
+.sync-group-select {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 5px;
+  padding: 2px 4px;
+  font-size: 10px;
+  font-family: inherit;
+  background: rgba(255, 255, 255, 0.85);
+  color: rgba(0, 0, 0, 0.75);
+}
+
+#default-sync-group-row,
+#memo-sync-group-row {
+  margin-top: 4px;
 }
 
 .settings-archive-sep {

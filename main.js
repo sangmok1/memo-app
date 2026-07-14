@@ -2,6 +2,12 @@ const { app, BrowserWindow, ipcMain, shell, nativeImage, screen, Menu } = requir
 const path = require('path');
 const fs = require('fs');
 const { mergeAppStates, mergeArchiveTrees } = require('./sync-merge');
+const {
+  filterAppStateByGroup,
+  applyGroupMergeToFull,
+  assignOrphanMemosToGroup,
+  normalizeSyncConfig,
+} = require('./sync-groups');
 
 app.setName('Memos');
 
@@ -539,18 +545,23 @@ async function pushBundle(key, bundle) {
   return data;
 }
 
-async function syncPullMergePush(appState, options = {}) {
-  const config = loadConfig();
-  const syncEnabled = options.syncEnabled ?? config.syncEnabled;
-  if (!syncEnabled) return { skipped: true };
+function packArchiveTreeForMemoIds(memoIdSet) {
+  const all = packArchiveTree();
+  const filtered = {};
+  Object.entries(all).forEach(([relPath, data]) => {
+    const memoId = relPath.split('/')[0];
+    if (memoIdSet.has(memoId)) filtered[relPath] = data;
+  });
+  return filtered;
+}
 
-  const apiUrl = getSyncApiUrl();
-  if (!apiUrl) throw new Error('sync_api_not_configured');
+async function syncOneGroup(fullAppState, group, defaultGroupId) {
+  let key = String(group.key || '').trim();
+  const subset = filterAppStateByGroup(fullAppState, group.id, defaultGroupId);
+  const memoIds = new Set(Object.keys(subset.memos));
+  const localArchives = packArchiveTreeForMemoIds(memoIds);
 
-  let key = String(options.key || config.syncKey || config.lastSyncKey || '').trim();
-  const localArchives = packArchiveTree();
   let remoteBundle = null;
-
   if (key) {
     try {
       remoteBundle = await fetchRemoteBundle(key);
@@ -559,58 +570,176 @@ async function syncPullMergePush(appState, options = {}) {
     }
   }
 
-  const mergedAppState = remoteBundle
-    ? mergeAppStates(appState, remoteBundle.appState)
-    : appState;
+  const mergedSubset = remoteBundle
+    ? mergeAppStates(subset, remoteBundle.appState)
+    : subset;
   const mergedArchives = remoteBundle
     ? mergeArchiveTrees(localArchives, remoteBundle.archives)
     : localArchives;
 
   applyArchiveTreeMerged(mergedArchives);
 
+  Object.keys(mergedSubset.memos).forEach((id) => {
+    mergedSubset.memos[id].syncGroupId = group.id;
+  });
+
   const outBundle = {
     version: 2,
     exportedAt: new Date().toISOString(),
-    appState: mergedAppState,
+    appState: mergedSubset,
     archives: mergedArchives,
   };
 
   const pushResult = await pushBundle(key || undefined, outBundle);
   key = pushResult.key || key;
 
-  config.syncEnabled = true;
-  config.syncKey = key;
-  config.lastSyncKey = key;
+  return { groupId: group.id, key, mergedSubset, merged: Boolean(remoteBundle) };
+}
+
+async function syncAllGroups(appState) {
+  const config = normalizeSyncConfig(loadConfig());
+  if (!config.syncEnabled) return { skipped: true };
+
+  const apiUrl = getSyncApiUrl();
+  if (!apiUrl) throw new Error('sync_api_not_configured');
+
+  if (!config.syncGroups.length) {
+    config.syncGroups.push({
+      id: 'sg-default',
+      key: '',
+      name: '그룹 1',
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  let fullState = appState;
+  const defaultGroupId = config.defaultSyncGroupId || config.syncGroups[0].id;
+  const primaryGroupId = config.syncGroups[0].id;
+
+  Object.values(fullState.memos || {}).forEach((memo) => {
+    if (!memo.syncGroupId) memo.syncGroupId = primaryGroupId;
+  });
+
+  for (const group of config.syncGroups) {
+    const result = await syncOneGroup(fullState, group, defaultGroupId);
+    fullState = applyGroupMergeToFull(fullState, group.id, result.mergedSubset, defaultGroupId);
+    group.key = result.key;
+  }
+
+  config.syncKey = config.syncGroups[0]?.key || config.syncKey || '';
+  config.lastSyncKey = config.syncKey;
   config.lastSyncAt = new Date().toISOString();
   saveConfig(config);
 
   return {
-    appState: mergedAppState,
-    key,
-    merged: Boolean(remoteBundle),
-    exportedAt: outBundle.exportedAt,
+    appState: fullState,
+    merged: true,
+    exportedAt: config.lastSyncAt,
   };
 }
 
+async function createSyncGroup(name) {
+  const config = normalizeSyncConfig(loadConfig());
+  const apiUrl = getSyncApiUrl();
+  if (!apiUrl) throw new Error('sync_api_not_configured');
+
+  const emptyBundle = {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    appState: {
+      memos: {},
+      memoOrder: [],
+      deletedMemos: {},
+      updatedAt: new Date().toISOString(),
+    },
+    archives: {},
+  };
+  const pushResult = await pushBundle(undefined, emptyBundle);
+  const group = {
+    id: `sg-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
+    key: pushResult.key,
+    name: name || `그룹 ${config.syncGroups.length + 1}`,
+    createdAt: new Date().toISOString(),
+  };
+  config.syncGroups.push(group);
+  config.defaultSyncGroupId = group.id;
+  config.syncEnabled = true;
+  saveConfig(config);
+  return group;
+}
+
+async function connectSyncGroup(appState, key) {
+  const config = normalizeSyncConfig(loadConfig());
+  const apiUrl = getSyncApiUrl();
+  if (!apiUrl) throw new Error('sync_api_not_configured');
+
+  const keyedGroups = config.syncGroups.filter((g) => g.key);
+  let group = config.syncGroups.find((g) => g.key === key);
+  if (!group) {
+    if (config.syncGroups.length === 1 && !config.syncGroups[0].key) {
+      group = config.syncGroups[0];
+      group.key = key;
+    } else {
+      group = {
+        id: `sg-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
+        key,
+        name: `그룹 ${config.syncGroups.length + 1}`,
+        createdAt: new Date().toISOString(),
+      };
+      config.syncGroups.push(group);
+    }
+    if (keyedGroups.length === 0) {
+      assignOrphanMemosToGroup(appState, group.id);
+    }
+  }
+
+  config.syncEnabled = true;
+  config.defaultSyncGroupId = group.id;
+  saveConfig(config);
+
+  const defaultGroupId = config.defaultSyncGroupId;
+  const result = await syncOneGroup(appState, group, defaultGroupId);
+  const fullState = applyGroupMergeToFull(appState, group.id, result.mergedSubset, defaultGroupId);
+  group.key = result.key;
+
+  config.lastSyncAt = new Date().toISOString();
+  saveConfig(config);
+
+  return { appState: fullState, group, key: result.key };
+}
+
+async function syncPullMergePush(appState, options = {}) {
+  if (options.key && options.connectGroup) {
+    return connectSyncGroup(appState, options.key);
+  }
+  return syncAllGroups(appState);
+}
+
 async function syncExportToCloud(appState, existingKey) {
-  return syncPullMergePush(appState, { key: existingKey, syncEnabled: true });
+  return syncAllGroups(appState);
 }
 
 async function syncImportFromCloud(appState, key) {
-  return syncPullMergePush(appState, { key, syncEnabled: true });
+  return connectSyncGroup(appState, key);
 }
 
-ipcMain.handle('sync-merge', (_, appState) => syncPullMergePush(appState));
+ipcMain.handle('sync-merge', (_, appState) => syncAllGroups(appState));
 ipcMain.handle('sync-export', (_, appState, existingKey) => syncExportToCloud(appState, existingKey));
 ipcMain.handle('sync-import', (_, appState, key) => syncImportFromCloud(appState, key));
+ipcMain.handle('create-sync-group', (_, name) => createSyncGroup(name));
 ipcMain.handle('set-sync-settings', (_, settings) => {
-  const config = loadConfig();
+  const config = normalizeSyncConfig(loadConfig());
   if (typeof settings.syncEnabled === 'boolean') config.syncEnabled = settings.syncEnabled;
+  if (settings.defaultSyncGroupId) {
+    const exists = config.syncGroups.some((g) => g.id === settings.defaultSyncGroupId);
+    if (exists) config.defaultSyncGroupId = settings.defaultSyncGroupId;
+  }
   if (settings.syncKey) {
     const safeKey = String(settings.syncKey).trim();
     if (/^[\w-]{12,64}$/.test(safeKey)) {
       config.syncKey = safeKey;
       config.lastSyncKey = safeKey;
+      if (config.syncGroups[0]) config.syncGroups[0].key = safeKey;
     }
   }
   saveConfig(config);
@@ -619,12 +748,15 @@ ipcMain.handle('set-sync-settings', (_, settings) => {
 ipcMain.handle('get-sync-config', () => getSyncConfigPayload());
 
 function getSyncConfigPayload() {
-  const config = loadConfig();
+  const config = normalizeSyncConfig(loadConfig());
+  const primary = config.syncGroups[0];
   return {
     apiUrl: getSyncApiUrl(),
     syncEnabled: Boolean(config.syncEnabled),
-    syncKey: config.syncKey || config.lastSyncKey || '',
-    lastSyncKey: config.syncKey || config.lastSyncKey || '',
+    syncKey: primary?.key || config.syncKey || config.lastSyncKey || '',
+    lastSyncKey: primary?.key || config.syncKey || config.lastSyncKey || '',
     lastSyncAt: config.lastSyncAt || '',
+    syncGroups: config.syncGroups,
+    defaultSyncGroupId: config.defaultSyncGroupId,
   };
 }
