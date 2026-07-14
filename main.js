@@ -1,6 +1,7 @@
-const { app, BrowserWindow, ipcMain, shell, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, nativeImage, screen, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { mergeAppStates, mergeArchiveTrees } = require('./sync-merge');
 
 app.setName('Memos');
 
@@ -270,8 +271,49 @@ function setAppIcon() {
   }
 }
 
+function sendOpenFind() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('open-find');
+}
+
+function createApplicationMenu() {
+  const editSubmenu = [
+    {
+      label: '찾기',
+      accelerator: 'CmdOrCtrl+F',
+      click: sendOpenFind,
+    },
+    { type: 'separator' },
+    { role: 'cut' },
+    { role: 'copy' },
+    { role: 'paste' },
+    { role: 'selectAll' },
+  ];
+
+  const template = process.platform === 'darwin'
+    ? [
+        {
+          label: app.name,
+          submenu: [
+            { role: 'about' },
+            { type: 'separator' },
+            { role: 'hide' },
+            { role: 'hideOthers' },
+            { role: 'unhide' },
+            { type: 'separator' },
+            { role: 'quit' },
+          ],
+        },
+        { label: '편집', submenu: editSubmenu },
+      ]
+    : [{ label: '편집', submenu: editSubmenu }];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 app.whenReady().then(() => {
   setAppIcon();
+  createApplicationMenu();
   const config = loadConfig();
   applyLoginSettings(config.openAtLogin !== false);
   createWindow();
@@ -353,6 +395,7 @@ ipcMain.handle('archive-completed', (_, memoId, dateKey, items) => {
     dateLabel: formatDateLabel(dateKey),
     memoId,
     items: [],
+    updatedAt: new Date().toISOString(),
   };
 
   if (fs.existsSync(filePath)) {
@@ -370,6 +413,7 @@ ipcMain.handle('archive-completed', (_, memoId, dateKey, items) => {
     }
   });
 
+  data.updatedAt = new Date().toISOString();
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
   writeMarkdown(memoId, dateKey, data);
   return filePath;
@@ -414,3 +458,173 @@ ipcMain.handle('save-period-report', (_, memoId, fileName, content) => {
   fs.writeFileSync(filePath, content, 'utf8');
   return filePath;
 });
+
+function getSyncApiUrl() {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'sync-api.config.json'), 'utf8'));
+    return String(cfg.apiUrl || '').replace(/\/$/, '');
+  } catch {
+    return '';
+  }
+}
+
+function packArchiveTree() {
+  ensureArchiveRoot();
+  const root = getArchiveRoot();
+  const archives = {};
+  if (!fs.existsSync(root)) return archives;
+
+  const walk = (relDir) => {
+    const fullDir = relDir ? path.join(root, relDir) : root;
+    for (const name of fs.readdirSync(fullDir)) {
+      const relPath = relDir ? `${relDir}/${name}` : name;
+      const fullPath = path.join(fullDir, name);
+      if (fs.statSync(fullPath).isDirectory()) {
+        walk(relPath);
+        continue;
+      }
+      if (!name.endsWith('.json')) continue;
+      try {
+        archives[relPath] = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+      } catch {
+        archives[relPath] = fs.readFileSync(fullPath, 'utf8');
+      }
+    }
+  };
+  walk('');
+  return archives;
+}
+
+function clearDirContents(dir) {
+  if (!fs.existsSync(dir)) return;
+  for (const name of fs.readdirSync(dir)) {
+    fs.rmSync(path.join(dir, name), { recursive: true, force: true });
+  }
+}
+
+function applyArchiveTreeMerged(archives) {
+  ensureArchiveRoot();
+  const root = getArchiveRoot();
+  if (!archives || typeof archives !== 'object') return;
+
+  Object.entries(archives).forEach(([relPath, data]) => {
+    const safeRel = relPath.replace(/^(\.\.[\\/])+/, '').replace(/^[/\\]+/, '');
+    if (!safeRel.endsWith('.json')) return;
+    const filePath = path.join(root, safeRel);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    const content = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+    fs.writeFileSync(filePath, content, 'utf8');
+  });
+}
+
+async function fetchRemoteBundle(key) {
+  const apiUrl = getSyncApiUrl();
+  if (!apiUrl || !key) return null;
+  const res = await fetch(`${apiUrl}?key=${encodeURIComponent(key)}`);
+  if (res.status === 404) return null;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `pull_failed_${res.status}`);
+  return data.bundle || null;
+}
+
+async function pushBundle(key, bundle) {
+  const apiUrl = getSyncApiUrl();
+  const res = await fetch(apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key, bundle }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `push_failed_${res.status}`);
+  return data;
+}
+
+async function syncPullMergePush(appState, options = {}) {
+  const config = loadConfig();
+  const syncEnabled = options.syncEnabled ?? config.syncEnabled;
+  if (!syncEnabled) return { skipped: true };
+
+  const apiUrl = getSyncApiUrl();
+  if (!apiUrl) throw new Error('sync_api_not_configured');
+
+  let key = String(options.key || config.syncKey || config.lastSyncKey || '').trim();
+  const localArchives = packArchiveTree();
+  let remoteBundle = null;
+
+  if (key) {
+    try {
+      remoteBundle = await fetchRemoteBundle(key);
+    } catch (err) {
+      if (err.message !== 'not_found') throw err;
+    }
+  }
+
+  const mergedAppState = remoteBundle
+    ? mergeAppStates(appState, remoteBundle.appState)
+    : appState;
+  const mergedArchives = remoteBundle
+    ? mergeArchiveTrees(localArchives, remoteBundle.archives)
+    : localArchives;
+
+  applyArchiveTreeMerged(mergedArchives);
+
+  const outBundle = {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    appState: mergedAppState,
+    archives: mergedArchives,
+  };
+
+  const pushResult = await pushBundle(key || undefined, outBundle);
+  key = pushResult.key || key;
+
+  config.syncEnabled = true;
+  config.syncKey = key;
+  config.lastSyncKey = key;
+  config.lastSyncAt = new Date().toISOString();
+  saveConfig(config);
+
+  return {
+    appState: mergedAppState,
+    key,
+    merged: Boolean(remoteBundle),
+    exportedAt: outBundle.exportedAt,
+  };
+}
+
+async function syncExportToCloud(appState, existingKey) {
+  return syncPullMergePush(appState, { key: existingKey, syncEnabled: true });
+}
+
+async function syncImportFromCloud(appState, key) {
+  return syncPullMergePush(appState, { key, syncEnabled: true });
+}
+
+ipcMain.handle('sync-merge', (_, appState) => syncPullMergePush(appState));
+ipcMain.handle('sync-export', (_, appState, existingKey) => syncExportToCloud(appState, existingKey));
+ipcMain.handle('sync-import', (_, appState, key) => syncImportFromCloud(appState, key));
+ipcMain.handle('set-sync-settings', (_, settings) => {
+  const config = loadConfig();
+  if (typeof settings.syncEnabled === 'boolean') config.syncEnabled = settings.syncEnabled;
+  if (settings.syncKey) {
+    const safeKey = String(settings.syncKey).trim();
+    if (/^[\w-]{12,64}$/.test(safeKey)) {
+      config.syncKey = safeKey;
+      config.lastSyncKey = safeKey;
+    }
+  }
+  saveConfig(config);
+  return getSyncConfigPayload();
+});
+ipcMain.handle('get-sync-config', () => getSyncConfigPayload());
+
+function getSyncConfigPayload() {
+  const config = loadConfig();
+  return {
+    apiUrl: getSyncApiUrl(),
+    syncEnabled: Boolean(config.syncEnabled),
+    syncKey: config.syncKey || config.lastSyncKey || '',
+    lastSyncKey: config.syncKey || config.lastSyncKey || '',
+    lastSyncAt: config.lastSyncAt || '',
+  };
+}

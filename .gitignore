@@ -1,4 +1,5 @@
 node_modules/
+sync-api/node_modules/
 dist/
 .DS_Store
 .env.signing

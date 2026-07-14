@@ -3,6 +3,8 @@ const ARCHIVE_FALLBACK_KEY = 'memo-postit-archive';
 const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 const ALARM_CHECK_INTERVAL = 15000;
 const DAY_CHECK_INTERVAL = 60 * 60 * 1000;
+const SYNC_DEBOUNCE_MS = 3000;
+const SYNC_INTERVAL_MS = 3 * 60 * 60 * 1000;
 
 const BELL_PATH = 'M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.9 2.49.4 4 2.42 4 4.9v6z';
 
@@ -92,8 +94,11 @@ function createAlarmItem(partial = {}) {
 
 function migrateData(raw) {
   if (raw && raw.memos && raw.memoOrder) {
+    const now = new Date().toISOString();
+    if (!raw.updatedAt) raw.updatedAt = now;
     Object.values(raw.memos).forEach((item) => {
       if (!item.type) item.type = 'memo';
+      if (!item.updatedAt) item.updatedAt = item.createdAt || now;
       if (item.type === 'alarm') {
         item.onceAlarms = item.onceAlarms || [];
         item.recurringAlarms = item.recurringAlarms || [];
@@ -138,8 +143,18 @@ function loadAppState() {
   };
 }
 
-function saveAppState() {
+function touchAppState(memoId = appState.activeMemoId) {
+  const now = new Date().toISOString();
+  appState.updatedAt = now;
+  if (memoId && appState.memos[memoId]) {
+    appState.memos[memoId].updatedAt = now;
+  }
+}
+
+function saveAppState(options = {}) {
+  if (!options.skipTouch) touchAppState();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+  if (!options.skipSync) scheduleCloudSync();
 }
 
 function createId() {
@@ -339,6 +354,7 @@ async function handleDayRolloverForMemo(memo) {
   memo.general = memo.general.filter((t) => !(t.done && t.text.trim()));
   if (!memo.general.length) memo.general = [createTodoItem()];
   memo.savedDate = getTodayKey();
+  memo.updatedAt = new Date().toISOString();
 }
 
 async function checkDayRollover() {
@@ -347,13 +363,15 @@ async function checkDayRollover() {
 
   if (todayKey === lastCheckedDateKey) return;
 
+  const dayChanged = lastCheckedDateKey !== null;
   lastCheckedDateKey = todayKey;
   for (const id of appState.memoOrder) {
     await handleDayRolloverForMemo(appState.memos[id]);
   }
   currentMemo = appState.memos[appState.activeMemoId];
-  saveAppState();
+  saveAppState({ skipSync: dayChanged });
   refreshActiveUI();
+  if (dayChanged) scheduleCloudSync(true);
 }
 
 function handleCheckboxChange(listType, index, isDone) {
@@ -468,12 +486,37 @@ function syncTodoTextPlaceholder(el) {
   el.classList.toggle('is-empty', !getTodoText(el));
 }
 
+function placeCaretAtStart(el) {
+  if (el.tagName === 'INPUT') {
+    el.setSelectionRange(0, 0);
+    return;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(true);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+}
+
 function bindTodoTextEvents(input, items, index, listType) {
   const onChange = () => {
     items[index].text = getTodoText(input);
     syncTodoTextPlaceholder(input);
     saveData();
   };
+
+  if (input.tagName === 'DIV') {
+    input.addEventListener('mousedown', (e) => {
+      if (getTodoText(input)) return;
+      e.preventDefault();
+      input.focus();
+      placeCaretAtStart(input);
+    });
+    input.addEventListener('focus', () => {
+      if (!getTodoText(input)) placeCaretAtStart(input);
+    });
+  }
 
   input.addEventListener('input', onChange);
   input.addEventListener('keydown', (e) => {
@@ -628,6 +671,7 @@ function renderAllLists() {
   if (!currentMemo.general?.length) currentMemo.general = [createTodoItem()];
   renderList(todayListEl, currentMemo.today, 'today');
   renderList(generalListEl, currentMemo.general, 'general');
+  refreshFindIfOpen();
 }
 
 function renderAlarmList(listEl, alarms, recurring) {
@@ -680,6 +724,7 @@ function renderAlarmLists() {
   if (!isAlarmBoard(currentMemo)) return;
   renderAlarmList(onceAlarmListEl, currentMemo.onceAlarms, false);
   renderAlarmList(recurringAlarmListEl, currentMemo.recurringAlarms, true);
+  refreshFindIfOpen();
 }
 
 function addItem(listType, depth = 0) {
@@ -745,6 +790,8 @@ function updateSettingsForType() {
   document.getElementById('btn-open-archive').style.display = isAlarm ? 'none' : '';
   const archiveRow = document.querySelector('.settings-archive-row');
   if (archiveRow) archiveRow.style.display = isAlarm ? 'none' : '';
+  const syncBlock = document.getElementById('sync-settings-block');
+  if (syncBlock) syncBlock.style.display = isAlarm ? 'none' : '';
   const btnArchiveReport = document.getElementById('btn-archive-report');
   if (btnArchiveReport) btnArchiveReport.style.display = isAlarm ? 'none' : '';
   const autoWrapRow = document.getElementById('auto-wrap-row');
@@ -1185,6 +1232,235 @@ document.getElementById('btn-confirm-delete').addEventListener('click', () => {
 document.getElementById('btn-cancel-delete').addEventListener('click', closeDeleteModal);
 deleteModal.querySelector('.modal-backdrop').addEventListener('click', closeDeleteModal);
 
+const syncModal = document.getElementById('sync-modal');
+const syncModalTitle = document.getElementById('sync-modal-title');
+const syncModalMessage = document.getElementById('sync-modal-message');
+const syncKeyInput = document.getElementById('sync-key-input');
+const syncHint = document.getElementById('sync-hint');
+const btnSyncConfirmImport = document.getElementById('btn-sync-confirm-import');
+const syncEnabledEl = document.getElementById('sync-enabled');
+const syncDetailRow = document.getElementById('sync-detail-row');
+const syncStatusEl = document.getElementById('sync-status');
+const syncSettingsBlock = document.getElementById('sync-settings-block');
+let syncModalMode = 'key';
+let syncDebounceTimer = null;
+let syncInFlight = false;
+let syncPending = false;
+
+function formatSyncTime(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '';
+  }
+}
+
+function updateSyncDetailVisibility(enabled) {
+  if (!syncDetailRow || !syncStatusEl) return;
+  syncDetailRow.classList.toggle('hidden', !enabled);
+  syncStatusEl.classList.toggle('hidden', !enabled);
+}
+
+async function updateSyncStatusUI() {
+  if (!window.electronAPI?.getSyncConfig || !syncStatusEl) return;
+  const config = await window.electronAPI.getSyncConfig();
+  if (!config.syncEnabled) {
+    updateSyncDetailVisibility(false);
+    return;
+  }
+  updateSyncDetailVisibility(true);
+  const when = formatSyncTime(config.lastSyncAt);
+  syncStatusEl.textContent = when
+    ? `마지막 동기화: ${when} · 저장·3시간·날짜 변경 시 자동 연동`
+    : '동기화 대기 중…';
+}
+
+function scheduleCloudSync(immediate = false) {
+  if (!window.electronAPI?.syncMerge) return;
+  if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
+  if (immediate) {
+    runCloudSync();
+    return;
+  }
+  syncDebounceTimer = setTimeout(() => {
+    syncDebounceTimer = null;
+    runCloudSync();
+  }, SYNC_DEBOUNCE_MS);
+}
+
+async function runCloudSync() {
+  if (!window.electronAPI?.syncMerge) return;
+  const config = await window.electronAPI.getSyncConfig();
+  if (!config.syncEnabled) return;
+
+  if (syncInFlight) {
+    syncPending = true;
+    return;
+  }
+
+  syncInFlight = true;
+  try {
+    const result = await window.electronAPI.syncMerge(appState);
+    if (result?.skipped) return;
+    if (result?.appState) {
+      appState = migrateData(result.appState);
+      currentMemo = appState.memos[appState.activeMemoId];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+      refreshActiveUI();
+    }
+    await updateSyncStatusUI();
+  } catch (err) {
+    console.error('cloud sync failed', err);
+    if (syncStatusEl) {
+      syncStatusEl.textContent = `동기화 실패: ${getSyncErrorMessage(err.message)}`;
+    }
+  } finally {
+    syncInFlight = false;
+    if (syncPending) {
+      syncPending = false;
+      scheduleCloudSync(true);
+    }
+  }
+}
+
+function openSyncModal(mode) {
+  syncModalMode = mode;
+  syncModal.classList.remove('hidden');
+  btnSyncConfirmImport.classList.toggle('hidden', mode !== 'connect');
+
+  if (mode === 'key') {
+    syncModalTitle.textContent = '동기화 키';
+    syncModalMessage.textContent = '다른 PC/Mac에서 이 키로 연결하면 메모가 자동으로 합쳐집니다.';
+    syncKeyInput.readOnly = true;
+    syncHint.textContent = '키는 이 기기들끼리만 공유하세요. 덮어쓰지 않고 병합합니다.';
+  } else {
+    syncModalTitle.textContent = '다른 기기 연결';
+    syncModalMessage.textContent = '이미 쓰던 동기화 키를 입력하세요. 로컬과 클라우드 메모가 합쳐집니다.';
+    syncKeyInput.readOnly = false;
+    syncKeyInput.value = '';
+    syncHint.textContent = '완료 기록(archive)도 함께 병합됩니다.';
+    syncKeyInput.focus();
+  }
+}
+
+function closeSyncModal() {
+  syncModal.classList.add('hidden');
+}
+
+function getSyncErrorMessage(code) {
+  return ({
+    sync_api_not_configured: '동기화 API가 설정되지 않았습니다. 앱을 다시 설치해 주세요.',
+    invalid_key: '키 형식이 올바르지 않습니다.',
+    not_found: '해당 키의 데이터를 찾을 수 없습니다.',
+    too_large: '메모 데이터가 너무 큽니다 (8MB 이하).',
+  })[code] || `동기화 오류: ${code}`;
+}
+
+async function handleSyncShowKey() {
+  if (!window.electronAPI?.getSyncConfig) return;
+  try {
+    await runCloudSync();
+    const config = await window.electronAPI.getSyncConfig();
+    syncKeyInput.value = config.syncKey || config.lastSyncKey || '';
+    openSyncModal('key');
+  } catch (err) {
+    alert(getSyncErrorMessage(err.message));
+  }
+}
+
+async function handleSyncConnectConfirm() {
+  const key = syncKeyInput.value.trim();
+  if (!key) {
+    alert('동기화 키를 입력해 주세요.');
+    return;
+  }
+
+  try {
+    await window.electronAPI.setSyncSettings({ syncKey: key, syncEnabled: true });
+    if (syncEnabledEl) syncEnabledEl.checked = true;
+    updateSyncDetailVisibility(true);
+    saveAppState({ skipSync: true });
+    const result = await window.electronAPI.syncImport(appState, key);
+    appState = migrateData(result.appState);
+    currentMemo = appState.memos[appState.activeMemoId];
+    saveAppState({ skipSync: true });
+    closeSyncModal();
+    refreshActiveUI();
+    await updateSyncStatusUI();
+    alert('연결했습니다. 메모가 병합되었습니다.');
+  } catch (err) {
+    alert(getSyncErrorMessage(err.message));
+  }
+}
+
+async function initSyncSettings() {
+  if (!window.electronAPI?.getSyncConfig || !syncEnabledEl) {
+    syncSettingsBlock?.remove();
+    return;
+  }
+
+  const config = await window.electronAPI.getSyncConfig();
+  syncEnabledEl.checked = Boolean(config.syncEnabled);
+  updateSyncDetailVisibility(config.syncEnabled);
+  await updateSyncStatusUI();
+
+  syncEnabledEl.addEventListener('change', async () => {
+    const enabled = syncEnabledEl.checked;
+    try {
+      await window.electronAPI.setSyncSettings({ syncEnabled: enabled });
+      updateSyncDetailVisibility(enabled);
+      if (enabled) {
+        await runCloudSync();
+        const updated = await window.electronAPI.getSyncConfig();
+        if (updated.syncKey) {
+          syncKeyInput.value = updated.syncKey;
+          openSyncModal('key');
+        }
+      }
+      await updateSyncStatusUI();
+    } catch (err) {
+      syncEnabledEl.checked = !enabled;
+      alert(getSyncErrorMessage(err.message));
+    }
+  });
+}
+
+const btnSyncShowKey = document.getElementById('btn-sync-show-key');
+const btnSyncConnect = document.getElementById('btn-sync-connect');
+if (btnSyncShowKey && window.electronAPI?.syncMerge) {
+  btnSyncShowKey.addEventListener('click', handleSyncShowKey);
+} else if (btnSyncShowKey) {
+  btnSyncShowKey.style.display = 'none';
+}
+if (btnSyncConnect && window.electronAPI?.syncImport) {
+  btnSyncConnect.addEventListener('click', () => openSyncModal('connect'));
+} else if (btnSyncConnect) {
+  btnSyncConnect.style.display = 'none';
+}
+
+document.getElementById('btn-sync-close')?.addEventListener('click', closeSyncModal);
+document.getElementById('btn-sync-copy-key')?.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(syncKeyInput.value);
+    const btn = document.getElementById('btn-sync-copy-key');
+    const orig = btn.textContent;
+    btn.textContent = '복사됨!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  } catch {
+    syncKeyInput.select();
+    document.execCommand('copy');
+  }
+});
+btnSyncConfirmImport?.addEventListener('click', handleSyncConnectConfirm);
+syncModal?.querySelector('.modal-backdrop')?.addEventListener('click', closeSyncModal);
+
 const loginAtStartEl = document.getElementById('login-at-start');
 if (loginAtStartEl && window.electronAPI?.getLoginSettings) {
   window.electronAPI.getLoginSettings().then(({ openAtLogin }) => {
@@ -1205,8 +1481,153 @@ if (window.electronAPI) {
 setupDropZone(todayListEl, 'today');
 setupDropZone(generalListEl, 'general');
 
+const findBarEl = document.getElementById('find-bar');
+const findInputEl = document.getElementById('find-input');
+const findCountEl = document.getElementById('find-count');
+const findState = { open: false, matches: [], index: -1 };
+
+function clearFindHighlights() {
+  document.querySelectorAll('.find-match, .find-current').forEach((el) => {
+    el.classList.remove('find-match', 'find-current');
+  });
+}
+
+function updateFindCount() {
+  if (!findCountEl) return;
+  if (!findState.matches.length) {
+    findCountEl.textContent = findInputEl?.value.trim() ? '0' : '';
+    return;
+  }
+  findCountEl.textContent = `${findState.index + 1}/${findState.matches.length}`;
+}
+
+function highlightFindMatch(index) {
+  findState.matches.forEach((el) => el.classList.remove('find-current'));
+  if (!findState.matches.length) {
+    findState.index = -1;
+    updateFindCount();
+    return;
+  }
+  findState.index = ((index % findState.matches.length) + findState.matches.length) % findState.matches.length;
+  const current = findState.matches[findState.index];
+  current.classList.add('find-current');
+  current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  updateFindCount();
+}
+
+function getTodoFieldText(el) {
+  if (!el) return '';
+  if (el.tagName === 'INPUT') return el.value || '';
+  return getTodoText(el);
+}
+
+function collectFindMatches(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+
+  if (isAlarmBoard(currentMemo)) {
+    return [...document.querySelectorAll('.alarm-item')].filter((li) => {
+      const title = li.querySelector('.alarm-item-title')?.textContent || '';
+      const meta = li.querySelector('.alarm-item-meta')?.textContent || '';
+      return `${title} ${meta}`.toLowerCase().includes(q);
+    });
+  }
+
+  return [...document.querySelectorAll('.todo-item')].filter((li) => {
+    const field = li.querySelector('.todo-text');
+    return getTodoFieldText(field).toLowerCase().includes(q);
+  });
+}
+
+function runFind(query, focusIndex = 0) {
+  clearFindHighlights();
+  findState.matches = collectFindMatches(query);
+  findState.matches.forEach((el) => el.classList.add('find-match'));
+  if (findState.matches.length) highlightFindMatch(focusIndex);
+  else updateFindCount();
+}
+
+function refreshFindIfOpen() {
+  if (!findState.open || !findInputEl) return;
+  runFind(findInputEl.value, findState.index >= 0 ? findState.index : 0);
+}
+
+function openFindBar(selectAll = false) {
+  if (!findBarEl || !findInputEl) return;
+  findBarEl.classList.remove('hidden');
+  findState.open = true;
+  findInputEl.focus();
+  if (selectAll) findInputEl.select();
+  runFind(findInputEl.value, 0);
+}
+
+function closeFindBar() {
+  if (!findBarEl || !findInputEl) return;
+  findBarEl.classList.add('hidden');
+  findState.open = false;
+  findState.matches = [];
+  findState.index = -1;
+  findInputEl.value = '';
+  if (findCountEl) findCountEl.textContent = '';
+  clearFindHighlights();
+}
+
+function stepFind(delta) {
+  if (!findState.open) return;
+  if (!findState.matches.length) {
+    runFind(findInputEl.value, 0);
+    return;
+  }
+  highlightFindMatch(findState.index + delta);
+}
+
+function isModalOpen() {
+  return document.querySelector('.modal:not(.hidden)') !== null;
+}
+
+function setupFindBar() {
+  if (!findBarEl || !findInputEl) return;
+
+  findInputEl.addEventListener('input', () => runFind(findInputEl.value, 0));
+  findInputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      stepFind(e.shiftKey ? -1 : 1);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeFindBar();
+    }
+  });
+
+  document.getElementById('find-prev')?.addEventListener('click', () => stepFind(-1));
+  document.getElementById('find-next')?.addEventListener('click', () => stepFind(1));
+  document.getElementById('find-close')?.addEventListener('click', closeFindBar);
+
+  document.addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'f') return;
+    if (isModalOpen()) return;
+    e.preventDefault();
+    if (findState.open) {
+      findInputEl.focus();
+      findInputEl.select();
+    } else {
+      openFindBar(true);
+    }
+  });
+
+  if (window.electronAPI?.onOpenFind) {
+    window.electronAPI.onOpenFind(() => {
+      if (isModalOpen()) return;
+      openFindBar(true);
+    });
+  }
+}
+
+setupFindBar();
+
 async function boot() {
   await checkDayRollover();
+  await initSyncSettings();
 
   if (window.electronAPI?.createMemoFolder) {
     for (const id of appState.memoOrder) {
@@ -1217,11 +1638,16 @@ async function boot() {
   }
 
   currentMemo = appState.memos[appState.activeMemoId];
-  saveAppState();
+  saveAppState({ skipSync: true });
   refreshActiveUI();
   checkAllAlarms();
   setInterval(checkAllAlarms, ALARM_CHECK_INTERVAL);
   setInterval(checkDayRollover, DAY_CHECK_INTERVAL);
+  if (window.electronAPI?.syncMerge) {
+    setInterval(runCloudSync, SYNC_INTERVAL_MS);
+    const config = await window.electronAPI.getSyncConfig();
+    if (config.syncEnabled) scheduleCloudSync(true);
+  }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') checkDayRollover();
   });

@@ -11,6 +11,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getArchivePath: (memoId) => ipcRenderer.invoke('get-archive-path', memoId),
   openArchiveFolder: (memoId) => ipcRenderer.invoke('open-archive-folder', memoId),
   openArchiveReportWindow: (memoId) => ipcRenderer.invoke('open-archive-report-window', memoId),
+  onOpenFind: (callback) => {
+    ipcRenderer.on('open-find', () => callback());
+  },
   getLoginSettings: () => ipcRenderer.invoke('get-login-settings'),
   setLoginSettings: (enabled) => ipcRenderer.invoke('set-login-settings', enabled),
+  syncMerge: (appState) => ipcRenderer.invoke('sync-merge', appState),
+  syncImport: (appState, key) => ipcRenderer.invoke('sync-import', appState, key),
+  setSyncSettings: (settings) => ipcRenderer.invoke('set-sync-settings', settings),
+  getSyncConfig: () => ipcRenderer.invoke('get-sync-config'),
 });

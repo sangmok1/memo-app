@@ -162,6 +162,83 @@ body {
   background: rgba(0, 0, 0, 0.15);
 }
 
+.find-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 6px;
+  background: rgba(255, 255, 255, 0.28);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  -webkit-app-region: no-drag;
+}
+
+.find-bar.hidden {
+  display: none;
+}
+
+.find-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  background: rgba(255, 255, 255, 0.85);
+  color: rgba(0, 0, 0, 0.8);
+}
+
+.find-input:focus {
+  outline: none;
+  border-color: rgba(0, 0, 0, 0.28);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+
+.find-count {
+  font-size: 10px;
+  color: rgba(0, 0, 0, 0.45);
+  min-width: 2.5em;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.find-btn {
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.55);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.find-btn:hover {
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.todo-item.find-match .todo-text {
+  background: rgba(255, 235, 59, 0.45);
+}
+
+.todo-item.find-current .todo-text {
+  background: rgba(255, 193, 7, 0.65);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.alarm-item.find-match {
+  background: rgba(255, 235, 59, 0.35);
+  border-radius: 6px;
+}
+
+.alarm-item.find-current {
+  background: rgba(255, 193, 7, 0.55);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+}
+
 #btn-settings.active {
   background: rgba(0, 0, 0, 0.18);
   color: rgba(0, 0, 0, 0.7);
@@ -250,12 +327,24 @@ body {
   text-underline-offset: 2px;
 }
 
-.settings-archive-row {
+.settings-archive-row,
+.settings-sync-row {
   display: flex;
   align-items: center;
   gap: 2px;
   flex-wrap: wrap;
   padding: 2px 0 0;
+}
+
+.settings-sync-block {
+  padding: 2px 0 0;
+}
+
+.sync-status {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: rgba(0, 0, 0, 0.45);
+  line-height: 1.35;
 }
 
 .settings-archive-sep {
@@ -536,7 +625,7 @@ body {
   cursor: text;
 }
 
-.todo-item .todo-text.wrap.is-empty::before {
+.todo-item .todo-text.wrap.is-empty:not(:focus)::before {
   content: attr(data-placeholder);
   color: rgba(0, 0, 0, 0.25);
   pointer-events: none;
@@ -750,6 +839,22 @@ body {
   font-size: 11px;
   line-height: 1.5;
   color: rgba(0, 0, 0, 0.55);
+  margin-bottom: 8px;
+}
+
+.sync-key-input {
+  width: 100%;
+  margin-bottom: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.sync-hint {
+  font-size: 10px;
+  color: rgba(0, 0, 0, 0.42);
+  margin-bottom: 8px;
+  line-height: 1.4;
 }
 
 .btn-danger {
