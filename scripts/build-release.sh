@@ -4,6 +4,8 @@ set -e
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$DIR"
 
+bash "$DIR/scripts/load-google-oauth.sh"
+
 VERSION=$(node -p "require('./package.json').version")
 export CSC_IDENTITY_AUTO_DISCOVERY=false
 

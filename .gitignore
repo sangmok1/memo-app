@@ -3,6 +3,8 @@ sync-api/node_modules/
 dist/
 .DS_Store
 .env.signing
+google-oauth.config.json
+.env.google.oauth
 archive/*.json
 archive/*.md
 archive/*/

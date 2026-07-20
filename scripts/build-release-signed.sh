@@ -6,6 +6,7 @@ cd "$DIR"
 
 # shellcheck source=load-signing-env.sh
 source "$DIR/scripts/load-signing-env.sh"
+bash "$DIR/scripts/load-google-oauth.sh"
 
 VERSION=$(node -p "require('./package.json').version")
 unset CSC_IDENTITY_AUTO_DISCOVERY

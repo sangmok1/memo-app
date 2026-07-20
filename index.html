@@ -53,22 +53,25 @@
         <button class="btn-archive-link" id="btn-archive-report">기간별 보기</button>
       </div>
       <div class="settings-sync-block" id="sync-settings-block">
-        <label class="setting-row">
-          <input type="checkbox" id="sync-enabled">
-          클라우드 동기화
-        </label>
-        <label class="setting-row hidden" id="memo-sync-key-row">
-          <span>이 메모 키</span>
-          <select id="memo-sync-key" class="sync-key-select"></select>
-        </label>
-        <div class="settings-sync-row hidden" id="sync-detail-row">
-          <button class="btn-archive-link" id="btn-sync-new-key">+ 새 키</button>
-          <span class="settings-archive-sep">·</span>
-          <button class="btn-archive-link" id="btn-sync-connect">연결</button>
-          <span class="settings-archive-sep">·</span>
-          <button class="btn-archive-link" id="btn-sync-show-key">키 복사</button>
-          <span class="settings-archive-sep">·</span>
-          <button class="btn-archive-link" id="btn-sync-delete-key">키 삭제</button>
+        <div class="sync-toggle-row">
+          <label class="setting-row sync-toggle-item">
+            <input type="checkbox" id="sync-enabled">
+            Google 로그인 동기화
+          </label>
+          <label class="setting-row sync-toggle-item">
+            <input type="checkbox" id="calendar-auto-import">
+            캘린더 자동 추가
+          </label>
+        </div>
+        <div class="sync-signed-in-block hidden" id="sync-signed-in-block">
+          <div class="google-account-label" id="google-account-label"></div>
+          <div class="settings-sync-row" id="sync-actions-row">
+            <button class="btn-archive-link" id="btn-google-logout">로그아웃</button>
+            <span class="settings-archive-sep">·</span>
+            <button class="btn-archive-link" id="btn-sync-pull">불러오기</button>
+            <span class="settings-archive-sep">·</span>
+            <button class="btn-archive-link" id="btn-sync-now">지금 동기화</button>
+          </div>
         </div>
         <p class="sync-status hidden" id="sync-status"></p>
       </div>
@@ -84,7 +87,10 @@
               <span class="date" id="today-date"></span>
             </div>
             <ul class="todo-list" id="today-list"></ul>
-            <button class="btn-add" data-list="today">+ 추가</button>
+            <div class="today-actions">
+              <button class="btn-add" data-list="today">+ 추가</button>
+              <button class="btn-add btn-calendar-add" id="btn-import-calendar" type="button">캘린더 일정 추가</button>
+            </div>
           </section>
 
           <div class="divider"></div>
@@ -196,20 +202,6 @@
     </div>
   </div>
 
-  <div class="modal hidden" id="sync-modal">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content modal-content-sm">
-      <h3 id="sync-modal-title">메모 동기화</h3>
-      <p class="modal-message" id="sync-modal-message"></p>
-      <input type="text" id="sync-key-input" class="form-input sync-key-input" readonly spellcheck="false">
-      <p class="sync-hint" id="sync-hint"></p>
-      <div class="modal-actions">
-        <button class="btn-copy" id="btn-sync-copy-key">키 복사</button>
-        <button class="btn-danger hidden" id="btn-sync-confirm-import">연결</button>
-        <button class="btn-close-modal" id="btn-sync-close">닫기</button>
-      </div>
-    </div>
-  </div>
 
   <div class="modal hidden" id="delete-modal">
     <div class="modal-backdrop"></div>

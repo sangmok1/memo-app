@@ -4,6 +4,10 @@ set -e
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$DIR"
 
+if [ -f "$DIR/.env.google.oauth" ]; then
+  bash "$DIR/scripts/load-google-oauth.sh"
+fi
+
 PROJECT="${GCP_PROJECT:-api-creator-461905}"
 REGION="${GCP_REGION:-asia-northeast3}"
 BUCKET="${GCS_BUCKET:-memos-sync-api-creator-461905}"
@@ -33,13 +37,18 @@ gsutil iam ch "serviceAccount:${RUN_SA}:objectAdmin" "gs://${BUCKET}" 2>/dev/nul
 cd "$DIR/sync-api"
 npm install --omit=dev
 
+GOOGLE_CLIENT_ID=""
+if [ -f "$DIR/google-oauth.config.json" ]; then
+  GOOGLE_CLIENT_ID=$(node -e "try{const c=require('$DIR/google-oauth.config.json');process.stdout.write(String(c.clientId||''));}catch{}" )
+fi
+
 echo "→ Cloud Run 배포..."
 gcloud run deploy "$SERVICE_NAME" \
   --project="$PROJECT" \
   --region="$REGION" \
   --source=. \
   --allow-unauthenticated \
-  --set-env-vars "GCS_BUCKET=${BUCKET}" \
+  --set-env-vars "GCS_BUCKET=${BUCKET},GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}" \
   --memory=256Mi \
   --timeout=60 \
   --quiet

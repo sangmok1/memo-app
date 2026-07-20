@@ -5,29 +5,21 @@ const ALARM_CHECK_INTERVAL = 15000;
 const DAY_CHECK_INTERVAL = 60 * 60 * 1000;
 const SYNC_DEBOUNCE_MS = 3000;
 const SYNC_INTERVAL_MS = 3 * 60 * 60 * 1000;
+const CALENDAR_AUTO_INTERVAL_MS = 60 * 60 * 1000;
 
-let syncConfigCache = { syncGroups: [], defaultSyncGroupId: 'sg-default' };
+let syncConfigCache = { googleAuth: null, cloudPullEnabled: false };
 
 function getDefaultSyncGroupId() {
-  return syncConfigCache.defaultSyncGroupId
-    || syncConfigCache.syncGroups?.[0]?.id
-    || 'sg-default';
-}
-
-function getSyncGroupKey(groupId) {
-  const group = syncConfigCache.syncGroups?.find((g) => g.id === groupId);
-  return group?.key || '';
+  return syncConfigCache.defaultSyncGroupId || 'sg-default';
 }
 
 function getMemoSyncGroupMeta(memo) {
   if (!syncConfigCache.syncEnabled || isAlarmBoard(memo)) return null;
-  const groups = syncConfigCache.syncGroups || [];
-  if (!groups.length) return null;
-  const groupId = memo.syncGroupId || getDefaultSyncGroupId();
-  const index = groups.findIndex((g) => g.id === groupId);
-  const group = index >= 0 ? groups[index] : groups[0];
-  if (!group?.key) return null;
-  return { group, index: index >= 0 ? index : 0 };
+  if (!syncConfigCache.googleAuth?.email) return null;
+  return {
+    group: { key: syncConfigCache.googleAuth.email },
+    index: 0,
+  };
 }
 
 const BELL_PATH = 'M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.9 2.49.4 4 2.42 4 4.9v6z';
@@ -407,7 +399,10 @@ async function checkDayRollover() {
   currentMemo = appState.memos[appState.activeMemoId];
   saveAppState({ skipSync: dayChanged });
   refreshActiveUI();
-  if (dayChanged) scheduleCloudSync(true);
+  if (dayChanged) {
+    scheduleCloudSync(true);
+    runAutoCalendarImport().catch(() => {});
+  }
 }
 
 function handleCheckboxChange(listType, index, isDone) {
@@ -889,7 +884,7 @@ function renderMemoSidebar() {
     let tabTitle = appState.memoOrder.length > 1
       ? `${isAlarm ? '알람' : '메모'} · ${item.id}\n클릭: 전환 · 우클릭: 삭제`
       : item.id;
-    if (syncMeta) tabTitle += `\n☁ ${syncKeyLabel(syncMeta.group.key)}`;
+    if (syncMeta) tabTitle += `\n☁ ${syncMeta.group.key}`;
     btn.title = tabTitle;
     if (isAlarm) {
       btn.appendChild(createBellSvg(item.colorHue ?? 200, 16));
@@ -929,8 +924,6 @@ function updateSettingsForType() {
   if (archiveRow) archiveRow.style.display = isAlarm ? 'none' : '';
   const syncBlock = document.getElementById('sync-settings-block');
   if (syncBlock) syncBlock.style.display = isAlarm ? 'none' : '';
-  const memoSyncKeyRow = document.getElementById('memo-sync-key-row');
-  if (memoSyncKeyRow) memoSyncKeyRow.style.display = isAlarm ? 'none' : '';
   const btnArchiveReport = document.getElementById('btn-archive-report');
   if (btnArchiveReport) btnArchiveReport.style.display = isAlarm ? 'none' : '';
   const autoWrapRow = document.getElementById('auto-wrap-row');
@@ -963,7 +956,6 @@ function refreshActiveUI() {
     renderAllLists();
   }
   renderMemoSidebar();
-  if (syncConfigCache.syncGroups?.length) renderSyncKeySelect();
 }
 
 function promptDeleteMemo(memoId) {
@@ -1387,20 +1379,15 @@ document.getElementById('btn-confirm-delete').addEventListener('click', () => {
 document.getElementById('btn-cancel-delete').addEventListener('click', closeDeleteModal);
 deleteModal.querySelector('.modal-backdrop').addEventListener('click', closeDeleteModal);
 
-const syncModal = document.getElementById('sync-modal');
-const syncModalTitle = document.getElementById('sync-modal-title');
-const syncModalMessage = document.getElementById('sync-modal-message');
-const syncKeyInput = document.getElementById('sync-key-input');
-const syncHint = document.getElementById('sync-hint');
-const btnSyncConfirmImport = document.getElementById('btn-sync-confirm-import');
 const syncEnabledEl = document.getElementById('sync-enabled');
-const syncDetailRow = document.getElementById('sync-detail-row');
+const calendarAutoImportEl = document.getElementById('calendar-auto-import');
+const syncSignedInBlock = document.getElementById('sync-signed-in-block');
 const syncStatusEl = document.getElementById('sync-status');
 const syncSettingsBlock = document.getElementById('sync-settings-block');
-const memoSyncKeyRow = document.getElementById('memo-sync-key-row');
-const memoSyncKeyEl = document.getElementById('memo-sync-key');
-const btnSyncDeleteKey = document.getElementById('btn-sync-delete-key');
-let syncModalMode = 'key';
+const googleAccountLabel = document.getElementById('google-account-label');
+const btnGoogleLogout = document.getElementById('btn-google-logout');
+const btnSyncPull = document.getElementById('btn-sync-pull');
+const btnSyncNow = document.getElementById('btn-sync-now');
 let syncDebounceTimer = null;
 let syncInFlight = false;
 let syncPending = false;
@@ -1420,50 +1407,197 @@ function formatSyncTime(iso) {
   }
 }
 
-function updateSyncDetailVisibility(enabled) {
-  if (!syncDetailRow || !syncStatusEl) return;
-  syncDetailRow.classList.toggle('hidden', !enabled);
-  syncStatusEl.classList.toggle('hidden', !enabled);
-  memoSyncKeyRow?.classList.toggle('hidden', !enabled);
+function updateGoogleSyncUI(config) {
+  const signedIn = Boolean(config?.googleAuth?.email);
+  const enabled = Boolean(config?.syncEnabled);
+
+  syncSignedInBlock?.classList.toggle('hidden', !(enabled && signedIn));
+  syncStatusEl?.classList.toggle('hidden', !enabled);
+
+  if (googleAccountLabel) {
+    googleAccountLabel.textContent = signedIn ? config.googleAuth.email : '';
+  }
+  if (calendarAutoImportEl) {
+    calendarAutoImportEl.checked = Boolean(config.calendarAutoImport);
+  }
 }
 
-function countMemosForSyncKey(groupId) {
-  const fallback = syncConfigCache.defaultSyncGroupId || syncConfigCache.syncGroups?.[0]?.id;
-  return Object.values(appState.memos).filter((m) => {
-    if (isAlarmBoard(m)) return false;
-    return (m.syncGroupId || fallback) === groupId;
-  }).length;
-}
+function mergeCalendarEventsIntoToday(memo, events, dateKey) {
+  if (!memo || isAlarmBoard(memo)) return { added: 0, updated: 0, removed: 0, changed: false };
+  if (!Array.isArray(memo.today)) memo.today = [createTodoItem()];
 
-function syncKeyLabel(key) {
-  if (!key) return '키 없음';
-  return key.length > 8 ? `···${key.slice(-8)}` : key;
-}
+  const remoteIds = new Set((events || []).map((event) => event.id).filter(Boolean));
+  let removed = 0;
 
-function formatSyncKeyOption(group) {
-  return `${syncKeyLabel(group.key)} · 메모 ${countMemosForSyncKey(group.id)}개`;
-}
-
-function renderSyncKeySelect() {
-  if (!memoSyncKeyEl) return;
-  const groups = (syncConfigCache.syncGroups || []).filter((g) => g.key);
-  memoSyncKeyEl.innerHTML = '';
-  groups.forEach((g) => {
-    const opt = document.createElement('option');
-    opt.value = g.id;
-    opt.textContent = formatSyncKeyOption(g);
-    memoSyncKeyEl.appendChild(opt);
+  memo.today = memo.today.filter((item) => {
+    if (!item.calendarEventId) return true;
+    if (item.calendarDate !== dateKey) return true;
+    if (remoteIds.has(item.calendarEventId)) return true;
+    removed += 1;
+    return false;
   });
-  if (currentMemo && !isAlarmBoard(currentMemo)) {
-    const selected = currentMemo.syncGroupId || getDefaultSyncGroupId();
-    if (groups.some((g) => g.id === selected)) {
-      memoSyncKeyEl.value = selected;
-    } else if (groups[0]) {
-      memoSyncKeyEl.value = groups[0].id;
+
+  const byEventId = new Map(
+    memo.today
+      .filter((item) => item.calendarEventId)
+      .map((item) => [item.calendarEventId, item]),
+  );
+
+  let added = 0;
+  let updated = 0;
+  (events || []).forEach((event) => {
+    if (!event?.id) return;
+    const existing = byEventId.get(event.id);
+    if (existing) {
+      if (existing.text !== event.text) {
+        existing.text = event.text;
+        updated += 1;
+      }
+      existing.calendarDate = dateKey;
+      return;
+    }
+
+    const newItem = {
+      id: createId(),
+      text: event.text,
+      done: false,
+      depth: 0,
+      calendarEventId: event.id,
+      calendarDate: dateKey,
+    };
+
+    const emptyIdx = memo.today.findIndex((item) => !item.text.trim() && !item.done && !item.calendarEventId);
+    if (emptyIdx >= 0) memo.today.splice(emptyIdx, 0, newItem);
+    else memo.today.push(newItem);
+    byEventId.set(event.id, newItem);
+    added += 1;
+  });
+
+  if (!memo.today.length) memo.today.push(createTodoItem());
+  memo.updatedAt = new Date().toISOString();
+  const changed = added > 0 || updated > 0 || removed > 0;
+  return { added, updated, removed, changed };
+}
+
+async function importCalendarToToday(options = {}) {
+  if (!window.electronAPI?.fetchCalendarToday || !currentMemo || isAlarmBoard(currentMemo)) {
+    return { added: 0, skipped: true };
+  }
+
+  let config = syncConfigCache?.googleAuth?.email
+    ? syncConfigCache
+    : await window.electronAPI.getSyncConfig();
+
+  if (!config.googleAuth?.email) {
+    if (options.promptLogin) {
+      throw new Error('google_not_signed_in');
+    }
+    return { added: 0, skipped: true };
+  }
+
+  if (!config.googleAuth?.calendarScopeGranted) {
+    if (options.silent || options.skipAuthPrompt) {
+      return { added: 0, updated: 0, removed: 0, skipped: true, changed: false };
+    }
+    if (!window.electronAPI?.googleRequestCalendar) {
+      throw new Error('calendar_permission_denied');
+    }
+    syncConfigCache = await window.electronAPI.googleRequestCalendar();
+    config = syncConfigCache;
+  }
+
+  const dateKey = getTodayKey();
+  let events;
+  try {
+    events = await window.electronAPI.fetchCalendarToday(dateKey);
+  } catch (err) {
+    if (
+      err.message === 'calendar_permission_denied'
+      && window.electronAPI?.googleRequestCalendar
+      && !options.silent
+    ) {
+      syncConfigCache = await window.electronAPI.googleRequestCalendar();
+      events = await window.electronAPI.fetchCalendarToday(dateKey);
+    } else {
+      throw err;
     }
   }
-  if (btnSyncDeleteKey) {
-    btnSyncDeleteKey.disabled = groups.length <= 1;
+
+  const mergeResult = mergeCalendarEventsIntoToday(currentMemo, events, dateKey);
+  if (mergeResult.changed || options.alwaysSave) {
+    saveAppState({ skipSync: true });
+    renderAllLists();
+  }
+  return {
+    ...mergeResult,
+    total: events?.length || 0,
+  };
+}
+
+async function runAutoCalendarImport() {
+  await refreshSyncConfigCache();
+  if (!syncConfigCache.calendarAutoImport) return;
+  if (!syncConfigCache.googleAuth?.email) return;
+  if (!syncConfigCache.googleAuth?.calendarScopeGranted) return;
+  if (!currentMemo || isAlarmBoard(currentMemo)) return;
+
+  try {
+    await importCalendarToToday({ silent: true, skipAuthPrompt: true });
+  } catch (err) {
+    console.error('auto calendar import failed', err);
+  }
+}
+
+async function ensureCalendarAutoReady() {
+  let config = syncConfigCache?.googleAuth?.email
+    ? syncConfigCache
+    : await window.electronAPI.getSyncConfig();
+
+  if (!config.googleAuth?.email) {
+    if (!syncEnabledEl?.checked) {
+      syncEnabledEl.checked = true;
+    }
+    await ensureGoogleLogin();
+    config = syncConfigCache;
+  }
+
+  if (!config.googleAuth?.calendarScopeGranted) {
+    syncConfigCache = await window.electronAPI.googleRequestCalendar();
+  }
+}
+
+async function handleImportCalendarClick() {
+  if (!currentMemo || isAlarmBoard(currentMemo)) return;
+
+  try {
+    let config = await window.electronAPI.getSyncConfig();
+    if (!config.googleAuth?.email) {
+      if (!syncEnabledEl?.checked) {
+        alert('먼저 설정에서 Google 로그인 동기화를 켜 주세요.');
+        return;
+      }
+      await ensureGoogleLogin();
+      config = syncConfigCache;
+    }
+
+    const btn = document.getElementById('btn-import-calendar');
+    if (btn) btn.disabled = true;
+
+    const result = await importCalendarToToday({ promptLogin: true, alwaysSave: true });
+    if (result.added > 0) {
+      alert(`캘린더 일정 ${result.added}개를 오늘 할일에 추가했습니다.`);
+    } else if (result.updated > 0 || result.removed > 0) {
+      alert('캘린더 일정을 업데이트했습니다.');
+    } else if (result.total > 0) {
+      alert('오늘 캘린더 일정은 이미 반영되어 있습니다.');
+    } else {
+      alert('오늘 등록된 캘린더 일정이 없습니다.');
+    }
+  } catch (err) {
+    alert(getSyncErrorMessage(err.message));
+  } finally {
+    const btn = document.getElementById('btn-import-calendar');
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -1476,18 +1610,21 @@ async function updateSyncStatusUI() {
   if (!window.electronAPI?.getSyncConfig || !syncStatusEl) return;
   await refreshSyncConfigCache();
   const config = syncConfigCache;
+  updateGoogleSyncUI(config);
+
   if (!config.syncEnabled) {
-    updateSyncDetailVisibility(false);
+    syncStatusEl.textContent = '';
     return;
   }
-  updateSyncDetailVisibility(true);
-  renderSyncKeySelect();
-  const keyCount = (config.syncGroups || []).filter((g) => g.key).length;
+
   const when = formatSyncTime(config.lastSyncAt);
-  const keyHint = keyCount > 1 ? ` · 키 ${keyCount}개` : '';
+  const pullHint = config.cloudPullEnabled
+    ? ' · 클라우드와 자동 맞춤'
+    : ' · 업로드만 (불러오기 전)';
+  const calendarHint = config.calendarAutoImport ? ' · 캘린더 1시간마다' : '';
   syncStatusEl.textContent = when
-    ? `마지막 동기화: ${when}${keyHint} · 같은 키끼리만 맞춰짐`
-    : '동기화 대기 중…';
+    ? `마지막 동기화: ${when}${pullHint}${calendarHint}`
+    : (config.googleAuth?.email ? '동기화 대기 중…' : '체크하면 Google 로그인 창이 열립니다');
 }
 
 function scheduleCloudSync(immediate = false) {
@@ -1503,10 +1640,22 @@ function scheduleCloudSync(immediate = false) {
   }, SYNC_DEBOUNCE_MS);
 }
 
+async function applySyncResult(result) {
+  if (result?.appState) {
+    appState = migrateData(result.appState);
+    currentMemo = appState.memos[appState.activeMemoId];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+    refreshActiveUI();
+  }
+  await refreshSyncConfigCache();
+  await updateSyncStatusUI();
+}
+
 async function runCloudSync() {
   if (!window.electronAPI?.syncMerge) return;
   const config = await window.electronAPI.getSyncConfig();
   if (!config.syncEnabled) return;
+  if (!config.googleAuth?.email) return;
 
   if (syncInFlight) {
     syncPending = true;
@@ -1517,15 +1666,7 @@ async function runCloudSync() {
   try {
     const result = await window.electronAPI.syncMerge(appState);
     if (result?.skipped) return;
-    if (result?.appState) {
-      appState = migrateData(result.appState);
-      currentMemo = appState.memos[appState.activeMemoId];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
-      refreshActiveUI();
-    }
-    await refreshSyncConfigCache();
-    renderSyncKeySelect();
-    await updateSyncStatusUI();
+    await applySyncResult(result);
   } catch (err) {
     console.error('cloud sync failed', err);
     if (syncStatusEl) {
@@ -1540,129 +1681,72 @@ async function runCloudSync() {
   }
 }
 
-function openSyncModal(mode) {
-  syncModalMode = mode;
-  syncModal.classList.remove('hidden');
-  btnSyncConfirmImport.classList.toggle('hidden', mode !== 'connect');
-
-  if (mode === 'key') {
-    syncModalTitle.textContent = '동기화 키';
-    syncModalMessage.textContent = '아래 키 전체를 다른 기기에 입력하세요. 같은 키를 쓰는 메모끼리만 맞춰집니다.';
-    syncKeyInput.readOnly = true;
-    syncHint.textContent = '목록에는 키 뒷자리만 보이지만, 복사되는 건 전체 키입니다.';
-  } else if (mode === 'new-group') {
-    syncModalTitle.textContent = '새 동기화 키';
-    syncModalMessage.textContent = '새 키가 만들어졌습니다. C에게 전달하세요. A와는 별도로 동기화됩니다.';
-    syncKeyInput.readOnly = true;
-    syncHint.textContent = '이 메모부터 이 키를 씁니다. 다른 메모는 「이 메모 키」에서 바꿀 수 있습니다.';
-  } else {
-    syncModalTitle.textContent = '다른 기기 연결';
-    syncModalMessage.textContent = '받은 동기화 키를 입력하세요. 목록에 키 뒷자리가 추가됩니다.';
-    syncKeyInput.readOnly = false;
-    syncKeyInput.value = '';
-    syncHint.textContent = '같은 키를 쓰는 메모끼리만 자동으로 맞춰집니다.';
-    syncKeyInput.focus();
-  }
-}
-
-function closeSyncModal() {
-  syncModal.classList.add('hidden');
-}
-
 function getSyncErrorMessage(code) {
+  const key = String(code || '');
+  if (key.includes('EADDRINUSE')) {
+    return '로그인 포트가 사용 중입니다. Memos를 완전히 종료(Cmd+Q)한 뒤 다시 시도해 주세요.';
+  }
   return ({
     sync_api_not_configured: '동기화 API가 설정되지 않았습니다. 앱을 다시 설치해 주세요.',
-    invalid_key: '키 형식이 올바르지 않습니다.',
-    not_found: '해당 키의 데이터를 찾을 수 없습니다.',
+    google_oauth_not_configured: 'Google OAuth가 설정되지 않았습니다.',
+    google_not_signed_in: 'Google 로그인이 필요합니다.',
+    google_missing_refresh_token: 'Google 로그인을 다시 해 주세요.',
+    unauthorized: 'Google 로그인이 만료되었습니다. 다시 로그인해 주세요.',
+    not_found: '클라우드에 저장된 메모가 없습니다.',
     too_large: '메모 데이터가 너무 큽니다 (8MB 이하).',
-    last_sync_key: '키는 최소 1개는 남겨 두세요.',
-    group_not_found: '키를 찾을 수 없습니다.',
+    access_denied: 'Google 로그인이 거부되었습니다. GCP OAuth 동의 화면에 본인 Gmail을 테스트 사용자로 추가했는지 확인해 주세요.',
+    invalid_oauth_callback: 'Google 로그인에 실패했습니다.',
+    oauth_port_in_use: '로그인 포트가 사용 중입니다. Memos를 완전히 종료한 뒤 다시 시도해 주세요.',
+    oauth_login_timeout: 'Google 로그인 시간이 초과되었습니다. 다시 시도해 주세요.',
+    redirect_uri_mismatch: 'Google OAuth redirect URI가 맞지 않습니다. GCP Console에 http://127.0.0.1:47829/callback 을 등록해 주세요.',
+    token_exchange_failed: 'Google 토큰 교환에 실패했습니다. OAuth redirect URI 설정을 확인해 주세요.',
+    token_refresh_failed: 'Google 로그인이 만료되었습니다. 다시 로그인해 주세요.',
+    calendar_permission_denied: '캘린더 권한이 필요합니다. 버튼을 다시 눌러 Google 캘린더 접근을 허용해 주세요.',
+    calendar_fetch_failed: '캘린더 일정을 불러오지 못했습니다.',
   })[code] || `동기화 오류: ${code}`;
 }
 
-async function handleSyncShowKey() {
-  if (!window.electronAPI?.getSyncConfig) return;
-  try {
-    await runCloudSync();
-    await refreshSyncConfigCache();
-    const groupId = memoSyncKeyEl?.value || getDefaultSyncGroupId();
-    syncKeyInput.value = getSyncGroupKey(groupId);
-    openSyncModal('key');
-  } catch (err) {
-    alert(getSyncErrorMessage(err.message));
+async function ensureGoogleLogin() {
+  if (!window.electronAPI?.googleLogin) throw new Error('google_oauth_not_configured');
+  const config = await window.electronAPI.getSyncConfig();
+  if (config.googleAuth?.email) {
+    syncConfigCache = config;
+    return config;
   }
+  syncConfigCache = await window.electronAPI.googleLogin();
+  if (syncEnabledEl) syncEnabledEl.checked = true;
+  updateGoogleSyncUI(syncConfigCache);
+  renderMemoSidebar();
+  return syncConfigCache;
 }
 
-async function handleSyncNewKey() {
-  if (!window.electronAPI?.createSyncGroup) return;
+async function handleGoogleLogout() {
+  if (!window.electronAPI?.googleLogout) return;
+  if (!confirm('Google 계정 연결을 해제할까요?')) return;
   try {
-    const group = await window.electronAPI.createSyncGroup();
-    if (syncEnabledEl) syncEnabledEl.checked = true;
-    updateSyncDetailVisibility(true);
-    if (currentMemo && !isAlarmBoard(currentMemo)) {
-      currentMemo.syncGroupId = group.id;
-      saveAppState({ skipSync: true });
-    }
-    await window.electronAPI.setSyncSettings({ defaultSyncGroupId: group.id });
-    await refreshSyncConfigCache();
-    renderSyncKeySelect();
-    syncKeyInput.value = group.key;
-    openSyncModal('new-group');
-    await updateSyncStatusUI();
+    syncConfigCache = await window.electronAPI.googleLogout();
+    if (syncEnabledEl) syncEnabledEl.checked = false;
+    updateGoogleSyncUI({ syncEnabled: false, googleAuth: null });
     renderMemoSidebar();
+    await updateSyncStatusUI();
   } catch (err) {
     alert(getSyncErrorMessage(err.message));
   }
 }
 
-async function handleSyncDeleteKey() {
-  const groupId = memoSyncKeyEl?.value;
-  if (!groupId || !window.electronAPI?.deleteSyncGroup) return;
-  const label = syncKeyLabel(getSyncGroupKey(groupId));
-  if (!confirm(`「${label}」 키를 삭제할까요?\n이 키를 쓰던 메모는 다른 키로 옮겨집니다.`)) return;
+async function handleSyncPull() {
+  if (!window.electronAPI?.syncPull) return;
+  if (!confirm('클라우드 메모를 이 기기로 불러올까요?\n로컬 메모와 병합됩니다.')) return;
 
   try {
-    await refreshSyncConfigCache();
-    const fallback = syncConfigCache.syncGroups.find((g) => g.id !== groupId);
-    if (!fallback) {
-      alert(getSyncErrorMessage('last_sync_key'));
-      return;
+    await ensureGoogleLogin();
+    const result = await window.electronAPI.syncPull(appState);
+    await applySyncResult(result);
+    if (result?.empty) {
+      alert('클라우드에 저장된 메모가 아직 없습니다.');
+    } else {
+      alert('클라우드 메모를 불러왔습니다.');
     }
-    Object.values(appState.memos).forEach((memo) => {
-      if ((memo.syncGroupId || getDefaultSyncGroupId()) === groupId) {
-        memo.syncGroupId = fallback.id;
-      }
-    });
-    await window.electronAPI.deleteSyncGroup(groupId);
-    saveAppState({ skipSync: true });
-    await refreshSyncConfigCache();
-    refreshActiveUI();
-    await updateSyncStatusUI();
-  } catch (err) {
-    alert(getSyncErrorMessage(err.message));
-  }
-}
-
-async function handleSyncConnectConfirm() {
-  const key = syncKeyInput.value.trim();
-  if (!key) {
-    alert('동기화 키를 입력해 주세요.');
-    return;
-  }
-
-  try {
-    await window.electronAPI.setSyncSettings({ syncEnabled: true });
-    if (syncEnabledEl) syncEnabledEl.checked = true;
-    updateSyncDetailVisibility(true);
-    saveAppState({ skipSync: true });
-    const result = await window.electronAPI.syncImport(appState, key);
-    appState = migrateData(result.appState);
-    currentMemo = appState.memos[appState.activeMemoId];
-    saveAppState({ skipSync: true });
-    closeSyncModal();
-    refreshActiveUI();
-    await updateSyncStatusUI();
-    alert(`연결했습니다. (···${key.slice(-8)})`);
   } catch (err) {
     alert(getSyncErrorMessage(err.message));
   }
@@ -1677,85 +1761,60 @@ async function initSyncSettings() {
   const config = await window.electronAPI.getSyncConfig();
   syncConfigCache = config;
   syncEnabledEl.checked = Boolean(config.syncEnabled);
-  updateSyncDetailVisibility(config.syncEnabled);
-  renderSyncKeySelect();
+  if (calendarAutoImportEl) calendarAutoImportEl.checked = Boolean(config.calendarAutoImport);
+  updateGoogleSyncUI(config);
   await updateSyncStatusUI();
-
-  memoSyncKeyEl?.addEventListener('change', async () => {
-    if (!currentMemo || isAlarmBoard(currentMemo)) return;
-    const groupId = memoSyncKeyEl.value;
-    currentMemo.syncGroupId = groupId;
-    try {
-      await window.electronAPI.setSyncSettings({ defaultSyncGroupId: groupId });
-      await refreshSyncConfigCache();
-    } catch (err) {
-      alert(getSyncErrorMessage(err.message));
-    }
-    saveData();
-    renderMemoSidebar();
-  });
 
   syncEnabledEl.addEventListener('change', async () => {
     const enabled = syncEnabledEl.checked;
     try {
-      await window.electronAPI.setSyncSettings({ syncEnabled: enabled });
-      updateSyncDetailVisibility(enabled);
-      renderMemoSidebar();
       if (enabled) {
+        await ensureGoogleLogin();
+        await window.electronAPI.setSyncSettings({ syncEnabled: true });
         await runCloudSync();
-        await refreshSyncConfigCache();
-        renderSyncKeySelect();
-        const groupId = memoSyncKeyEl?.value || getDefaultSyncGroupId();
-        syncKeyInput.value = getSyncGroupKey(groupId);
-        if (syncKeyInput.value) openSyncModal('key');
+      } else {
+        await window.electronAPI.setSyncSettings({ syncEnabled: false });
       }
+      await refreshSyncConfigCache();
+      updateGoogleSyncUI(syncConfigCache);
+      renderMemoSidebar();
       await updateSyncStatusUI();
     } catch (err) {
       syncEnabledEl.checked = !enabled;
+      updateGoogleSyncUI({
+        syncEnabled: syncEnabledEl.checked,
+        googleAuth: syncConfigCache.googleAuth,
+      });
+      alert(getSyncErrorMessage(err.message));
+    }
+  });
+
+  calendarAutoImportEl?.addEventListener('change', async () => {
+    const enabled = calendarAutoImportEl.checked;
+    try {
+      if (enabled) {
+        await ensureCalendarAutoReady();
+        await window.electronAPI.setSyncSettings({ calendarAutoImport: true });
+        await refreshSyncConfigCache();
+        updateGoogleSyncUI(syncConfigCache);
+        await importCalendarToToday({ alwaysSave: true, skipAuthPrompt: true });
+      } else {
+        await window.electronAPI.setSyncSettings({ calendarAutoImport: false });
+        await refreshSyncConfigCache();
+      }
+      await updateSyncStatusUI();
+    } catch (err) {
+      calendarAutoImportEl.checked = !enabled;
+      await window.electronAPI.setSyncSettings({ calendarAutoImport: calendarAutoImportEl.checked });
       alert(getSyncErrorMessage(err.message));
     }
   });
 }
 
-const btnSyncShowKey = document.getElementById('btn-sync-show-key');
-const btnSyncConnect = document.getElementById('btn-sync-connect');
-const btnSyncNewKey = document.getElementById('btn-sync-new-key');
-if (btnSyncShowKey && window.electronAPI?.syncMerge) {
-  btnSyncShowKey.addEventListener('click', handleSyncShowKey);
-} else if (btnSyncShowKey) {
-  btnSyncShowKey.style.display = 'none';
-}
-if (btnSyncConnect && window.electronAPI?.syncImport) {
-  btnSyncConnect.addEventListener('click', () => openSyncModal('connect'));
-} else if (btnSyncConnect) {
-  btnSyncConnect.style.display = 'none';
-}
-if (btnSyncNewKey && window.electronAPI?.createSyncGroup) {
-  btnSyncNewKey.addEventListener('click', handleSyncNewKey);
-} else if (btnSyncNewKey) {
-  btnSyncNewKey.style.display = 'none';
-}
-if (btnSyncDeleteKey && window.electronAPI?.deleteSyncGroup) {
-  btnSyncDeleteKey.addEventListener('click', handleSyncDeleteKey);
-} else if (btnSyncDeleteKey) {
-  btnSyncDeleteKey.style.display = 'none';
-}
-
-document.getElementById('btn-sync-close')?.addEventListener('click', closeSyncModal);
-document.getElementById('btn-sync-copy-key')?.addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(syncKeyInput.value);
-    const btn = document.getElementById('btn-sync-copy-key');
-    const orig = btn.textContent;
-    btn.textContent = '복사됨!';
-    setTimeout(() => { btn.textContent = orig; }, 1500);
-  } catch {
-    syncKeyInput.select();
-    document.execCommand('copy');
-  }
-});
-btnSyncConfirmImport?.addEventListener('click', handleSyncConnectConfirm);
-syncModal?.querySelector('.modal-backdrop')?.addEventListener('click', closeSyncModal);
+btnGoogleLogout?.addEventListener('click', handleGoogleLogout);
+btnSyncPull?.addEventListener('click', handleSyncPull);
+btnSyncNow?.addEventListener('click', () => runCloudSync());
+document.getElementById('btn-import-calendar')?.addEventListener('click', handleImportCalendarClick);
 
 const loginAtStartEl = document.getElementById('login-at-start');
 if (loginAtStartEl && window.electronAPI?.getLoginSettings) {
@@ -1941,11 +2000,20 @@ async function boot() {
   setInterval(checkDayRollover, DAY_CHECK_INTERVAL);
   if (window.electronAPI?.syncMerge) {
     setInterval(runCloudSync, SYNC_INTERVAL_MS);
+    setInterval(runAutoCalendarImport, CALENDAR_AUTO_INTERVAL_MS);
     const config = await window.electronAPI.getSyncConfig();
-    if (config.syncEnabled) scheduleCloudSync(true);
+    if (config.syncEnabled) {
+      scheduleCloudSync(true);
+    }
+    if (config.calendarAutoImport) {
+      runAutoCalendarImport().catch(() => {});
+    }
   }
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') checkDayRollover();
+    if (document.visibilityState === 'visible') {
+      checkDayRollover();
+      runAutoCalendarImport().catch(() => {});
+    }
   });
 }
 

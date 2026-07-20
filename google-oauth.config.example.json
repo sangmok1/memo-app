@@ -1,0 +1,5 @@
+{
+  "clientId": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+  "clientSecret": "YOUR_CLIENT_SECRET",
+  "_comment": "Redirect URI (GCP Console에 등록): http://127.0.0.1:47829/callback"
+}

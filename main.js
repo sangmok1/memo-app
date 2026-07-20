@@ -2,13 +2,16 @@ const { app, BrowserWindow, ipcMain, shell, nativeImage, screen, Menu } = requir
 const path = require('path');
 const fs = require('fs');
 const { mergeAppStates, mergeArchiveTrees } = require('./sync-merge');
+const { normalizeSyncConfig } = require('./sync-groups');
 const {
-  filterAppStateByGroup,
-  applyGroupMergeToFull,
-  assignOrphanMemosToGroup,
-  normalizeSyncConfig,
-  syncGroupKeyLabel,
-} = require('./sync-groups');
+  getClientId,
+  getClientSecret,
+  loginWithGoogle,
+  getValidIdToken,
+  getValidAccessToken,
+  publicGoogleAuth,
+} = require('./google-auth');
+const { fetchCalendarEventsForDate } = require('./google-calendar');
 
 app.setName('Memos');
 
@@ -524,239 +527,214 @@ function applyArchiveTreeMerged(archives) {
   });
 }
 
-async function fetchRemoteBundle(key) {
+function saveGoogleAuthRecord(auth) {
+  const config = normalizeSyncConfig(loadConfig());
+  config.googleAuth = auth;
+  saveConfig(config);
+}
+
+async function getGoogleIdToken() {
+  const config = normalizeSyncConfig(loadConfig());
+  if (!config.googleAuth?.refreshToken && !config.googleAuth?.idToken) {
+    throw new Error('google_not_signed_in');
+  }
+  const clientId = getClientId(__dirname);
+  const clientSecret = getClientSecret(__dirname);
+  if (!clientId) throw new Error('google_oauth_not_configured');
+  return getValidIdToken(config.googleAuth, clientId, clientSecret, saveGoogleAuthRecord);
+}
+
+async function getGoogleAccessToken() {
+  const config = normalizeSyncConfig(loadConfig());
+  if (!config.googleAuth?.refreshToken && !config.googleAuth?.accessToken) {
+    throw new Error('google_not_signed_in');
+  }
+  const clientId = getClientId(__dirname);
+  const clientSecret = getClientSecret(__dirname);
+  if (!clientId) throw new Error('google_oauth_not_configured');
+  return getValidAccessToken(config.googleAuth, clientId, clientSecret, saveGoogleAuthRecord);
+}
+
+async function fetchRemoteBundleAuth(idToken) {
   const apiUrl = getSyncApiUrl();
-  if (!apiUrl || !key) return null;
-  const res = await fetch(`${apiUrl}?key=${encodeURIComponent(key)}`);
+  if (!apiUrl) throw new Error('sync_api_not_configured');
+  const res = await fetch(apiUrl, {
+    headers: { Authorization: `Bearer ${idToken}` },
+  });
   if (res.status === 404) return null;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `pull_failed_${res.status}`);
   return data.bundle || null;
 }
 
-async function pushBundle(key, bundle) {
+async function pushBundleAuth(idToken, bundle, options = {}) {
   const apiUrl = getSyncApiUrl();
+  if (!apiUrl) throw new Error('sync_api_not_configured');
+  const body = { bundle };
+  if (options.mergeOnly) body.mode = 'merge';
   const res = await fetch(apiUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key, bundle }),
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `push_failed_${res.status}`);
   return data;
 }
 
-function packArchiveTreeForMemoIds(memoIdSet) {
-  const all = packArchiveTree();
-  const filtered = {};
-  Object.entries(all).forEach(([relPath, data]) => {
-    const memoId = relPath.split('/')[0];
-    if (memoIdSet.has(memoId)) filtered[relPath] = data;
-  });
-  return filtered;
-}
-
-async function syncOneGroup(fullAppState, group, defaultGroupId) {
-  let key = String(group.key || '').trim();
-  const subset = filterAppStateByGroup(fullAppState, group.id, defaultGroupId);
-  const memoIds = new Set(Object.keys(subset.memos));
-  const localArchives = packArchiveTreeForMemoIds(memoIds);
-
-  let remoteBundle = null;
-  if (key) {
-    try {
-      remoteBundle = await fetchRemoteBundle(key);
-    } catch (err) {
-      if (err.message !== 'not_found') throw err;
-    }
-  }
-
-  const mergedSubset = remoteBundle
-    ? mergeAppStates(subset, remoteBundle.appState)
-    : subset;
-  const mergedArchives = remoteBundle
-    ? mergeArchiveTrees(localArchives, remoteBundle.archives)
-    : localArchives;
-
-  applyArchiveTreeMerged(mergedArchives);
-
-  Object.keys(mergedSubset.memos).forEach((id) => {
-    mergedSubset.memos[id].syncGroupId = group.id;
-  });
-
-  const outBundle = {
+function buildSyncBundle(appState, archives) {
+  return {
     version: 2,
     exportedAt: new Date().toISOString(),
-    appState: mergedSubset,
-    archives: mergedArchives,
+    appState,
+    archives,
   };
-
-  const pushResult = await pushBundle(key || undefined, outBundle);
-  key = pushResult.key || key;
-
-  return { groupId: group.id, key, mergedSubset, merged: Boolean(remoteBundle) };
 }
 
-async function syncAllGroups(appState) {
+async function syncWithGoogle(appState, options = {}) {
   const config = normalizeSyncConfig(loadConfig());
   if (!config.syncEnabled) return { skipped: true };
 
   const apiUrl = getSyncApiUrl();
   if (!apiUrl) throw new Error('sync_api_not_configured');
+  if (!config.googleAuth?.sub) throw new Error('google_not_signed_in');
 
-  if (!config.syncGroups.length) {
-    config.syncGroups.push({
-      id: 'sg-default',
-      key: '',
-      name: syncGroupKeyLabel(''),
-      createdAt: new Date().toISOString(),
-    });
+  const idToken = await getGoogleIdToken();
+  const pull = config.cloudPullEnabled === true;
+  const localArchives = packArchiveTree();
+
+  let remoteBundle = null;
+  if (pull) {
+    remoteBundle = await fetchRemoteBundleAuth(idToken);
   }
 
-  let fullState = appState;
-  const defaultGroupId = config.defaultSyncGroupId || config.syncGroups[0].id;
-  const primaryGroupId = config.syncGroups[0].id;
+  const mergedState = remoteBundle
+    ? mergeAppStates(appState, remoteBundle.appState)
+    : appState;
+  const mergedArchives = remoteBundle
+    ? mergeArchiveTrees(localArchives, remoteBundle.archives)
+    : localArchives;
 
-  Object.values(fullState.memos || {}).forEach((memo) => {
-    if (!memo.syncGroupId) memo.syncGroupId = primaryGroupId;
-  });
-
-  for (const group of config.syncGroups.filter((g) => g.key)) {
-    const result = await syncOneGroup(fullState, group, defaultGroupId);
-    fullState = applyGroupMergeToFull(fullState, group.id, result.mergedSubset, defaultGroupId);
-    group.key = result.key;
-    group.name = syncGroupKeyLabel(result.key);
+  if (pull) {
+    applyArchiveTreeMerged(mergedArchives);
   }
 
-  config.syncGroups = config.syncGroups.map((g) => ({ ...g, name: syncGroupKeyLabel(g.key) }));
+  const outBundle = buildSyncBundle(
+    pull ? mergedState : appState,
+    pull ? mergedArchives : localArchives,
+  );
 
-  config.syncKey = config.syncGroups[0]?.key || config.syncKey || '';
-  config.lastSyncKey = config.syncKey;
+  await pushBundleAuth(idToken, outBundle, { mergeOnly: !pull });
+
   config.lastSyncAt = new Date().toISOString();
   saveConfig(config);
 
+  if (!pull) {
+    return {
+      pushed: true,
+      merged: false,
+      exportedAt: config.lastSyncAt,
+    };
+  }
+
   return {
-    appState: fullState,
+    appState: mergedState,
+    merged: Boolean(remoteBundle),
+    exportedAt: config.lastSyncAt,
+  };
+}
+
+async function pullFromGoogleCloud(appState) {
+  const config = normalizeSyncConfig(loadConfig());
+  if (!config.googleAuth?.sub) throw new Error('google_not_signed_in');
+
+  const idToken = await getGoogleIdToken();
+  const remoteBundle = await fetchRemoteBundleAuth(idToken);
+  const localArchives = packArchiveTree();
+
+  if (!remoteBundle) {
+    config.cloudPullEnabled = true;
+    config.lastSyncAt = new Date().toISOString();
+    saveConfig(config);
+    return { appState, merged: false, empty: true };
+  }
+
+  const mergedState = mergeAppStates(appState, remoteBundle.appState);
+  const mergedArchives = mergeArchiveTrees(localArchives, remoteBundle.archives);
+  applyArchiveTreeMerged(mergedArchives);
+
+  config.cloudPullEnabled = true;
+  config.lastSyncAt = new Date().toISOString();
+  saveConfig(config);
+
+  await pushBundleAuth(idToken, buildSyncBundle(mergedState, mergedArchives));
+
+  return {
+    appState: mergedState,
     merged: true,
     exportedAt: config.lastSyncAt,
   };
 }
 
-async function createSyncGroup(name) {
+ipcMain.handle('google-login', async () => {
+  const auth = await loginWithGoogle(__dirname, { includeCalendar: false });
   const config = normalizeSyncConfig(loadConfig());
-  const apiUrl = getSyncApiUrl();
-  if (!apiUrl) throw new Error('sync_api_not_configured');
-
-  const emptyBundle = {
-    version: 2,
-    exportedAt: new Date().toISOString(),
-    appState: {
-      memos: {},
-      memoOrder: [],
-      deletedMemos: {},
-      updatedAt: new Date().toISOString(),
-    },
-    archives: {},
+  const sameAccount = config.googleAuth?.sub && config.googleAuth.sub === auth.sub;
+  const keepCalendarScope = sameAccount && config.googleAuth?.calendarScopeGranted;
+  config.googleAuth = {
+    ...auth,
+    calendarScopeGranted: keepCalendarScope || auth.calendarScopeGranted,
   };
-  const pushResult = await pushBundle(undefined, emptyBundle);
-  const group = {
-    id: `sg-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
-    key: pushResult.key,
-    name: syncGroupKeyLabel(pushResult.key),
-    createdAt: new Date().toISOString(),
-  };
-  config.syncGroups.push(group);
-  config.defaultSyncGroupId = group.id;
+  if (!sameAccount) config.cloudPullEnabled = false;
   config.syncEnabled = true;
-  saveConfig(config);
-  return group;
-}
-
-async function connectSyncGroup(appState, key) {
-  const config = normalizeSyncConfig(loadConfig());
-  const apiUrl = getSyncApiUrl();
-  if (!apiUrl) throw new Error('sync_api_not_configured');
-
-  const keyedGroups = config.syncGroups.filter((g) => g.key);
-  let group = config.syncGroups.find((g) => g.key === key);
-  if (!group) {
-    if (config.syncGroups.length === 1 && !config.syncGroups[0].key) {
-      group = config.syncGroups[0];
-      group.key = key;
-    } else {
-      group = {
-        id: `sg-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
-        key,
-        name: syncGroupKeyLabel(key),
-        createdAt: new Date().toISOString(),
-      };
-      config.syncGroups.push(group);
-    }
-    if (keyedGroups.length === 0) {
-      assignOrphanMemosToGroup(appState, group.id);
-    }
-  }
-
-  config.syncEnabled = true;
-  config.defaultSyncGroupId = group.id;
-  saveConfig(config);
-
-  const defaultGroupId = config.defaultSyncGroupId;
-  const result = await syncOneGroup(appState, group, defaultGroupId);
-  const fullState = applyGroupMergeToFull(appState, group.id, result.mergedSubset, defaultGroupId);
-  group.key = result.key;
-
-  config.lastSyncAt = new Date().toISOString();
-  saveConfig(config);
-
-  return { appState: fullState, group, key: result.key };
-}
-
-async function syncPullMergePush(appState, options = {}) {
-  if (options.key && options.connectGroup) {
-    return connectSyncGroup(appState, options.key);
-  }
-  return syncAllGroups(appState);
-}
-
-async function syncExportToCloud(appState, existingKey) {
-  return syncAllGroups(appState);
-}
-
-async function syncImportFromCloud(appState, key) {
-  return connectSyncGroup(appState, key);
-}
-
-ipcMain.handle('sync-merge', (_, appState) => syncAllGroups(appState));
-ipcMain.handle('sync-export', (_, appState, existingKey) => syncExportToCloud(appState, existingKey));
-ipcMain.handle('sync-import', (_, appState, key) => syncImportFromCloud(appState, key));
-ipcMain.handle('create-sync-group', (_, name) => createSyncGroup(name));
-ipcMain.handle('delete-sync-group', (_, groupId) => {
-  const config = normalizeSyncConfig(loadConfig());
-  if (config.syncGroups.length <= 1) throw new Error('last_sync_key');
-  const idx = config.syncGroups.findIndex((g) => g.id === groupId);
-  if (idx === -1) throw new Error('group_not_found');
-  config.syncGroups.splice(idx, 1);
-  if (config.defaultSyncGroupId === groupId) {
-    config.defaultSyncGroupId = config.syncGroups[0].id;
-  }
   saveConfig(config);
   return getSyncConfigPayload();
 });
+
+ipcMain.handle('google-request-calendar', async () => {
+  const config = normalizeSyncConfig(loadConfig());
+  const auth = await loginWithGoogle(__dirname, { includeCalendar: true });
+  config.googleAuth = {
+    ...(config.googleAuth || {}),
+    ...auth,
+    calendarScopeGranted: true,
+  };
+  config.syncEnabled = true;
+  saveConfig(config);
+  return getSyncConfigPayload();
+});
+
+ipcMain.handle('google-logout', () => {
+  const config = normalizeSyncConfig(loadConfig());
+  delete config.googleAuth;
+  config.syncEnabled = false;
+  config.cloudPullEnabled = false;
+  saveConfig(config);
+  return getSyncConfigPayload();
+});
+
+ipcMain.handle('fetch-calendar-today', async (_, dateKey) => {
+  const accessToken = await getGoogleAccessToken();
+  const key = String(dateKey || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+    throw new Error('invalid_date_key');
+  }
+  return fetchCalendarEventsForDate(accessToken, key);
+});
+
+ipcMain.handle('sync-merge', (_, appState) => syncWithGoogle(appState));
+ipcMain.handle('sync-pull', (_, appState) => pullFromGoogleCloud(appState));
 ipcMain.handle('set-sync-settings', (_, settings) => {
   const config = normalizeSyncConfig(loadConfig());
   if (typeof settings.syncEnabled === 'boolean') config.syncEnabled = settings.syncEnabled;
-  if (settings.defaultSyncGroupId) {
-    const exists = config.syncGroups.some((g) => g.id === settings.defaultSyncGroupId);
-    if (exists) config.defaultSyncGroupId = settings.defaultSyncGroupId;
+  if (typeof settings.cloudPullEnabled === 'boolean') {
+    config.cloudPullEnabled = settings.cloudPullEnabled;
   }
-  if (settings.syncKey) {
-    const safeKey = String(settings.syncKey).trim();
-    if (/^[\w-]{12,64}$/.test(safeKey)) {
-      config.syncKey = safeKey;
-      config.lastSyncKey = safeKey;
-      if (config.syncGroups[0]) config.syncGroups[0].key = safeKey;
-    }
+  if (typeof settings.calendarAutoImport === 'boolean') {
+    config.calendarAutoImport = settings.calendarAutoImport;
   }
   saveConfig(config);
   return getSyncConfigPayload();
@@ -765,14 +743,13 @@ ipcMain.handle('get-sync-config', () => getSyncConfigPayload());
 
 function getSyncConfigPayload() {
   const config = normalizeSyncConfig(loadConfig());
-  const primary = config.syncGroups[0];
   return {
     apiUrl: getSyncApiUrl(),
     syncEnabled: Boolean(config.syncEnabled),
-    syncKey: primary?.key || config.syncKey || config.lastSyncKey || '',
-    lastSyncKey: primary?.key || config.syncKey || config.lastSyncKey || '',
+    cloudPullEnabled: config.cloudPullEnabled === true,
+    calendarAutoImport: config.calendarAutoImport === true,
+    googleAuth: publicGoogleAuth(config.googleAuth),
     lastSyncAt: config.lastSyncAt || '',
-    syncGroups: config.syncGroups,
     defaultSyncGroupId: config.defaultSyncGroupId,
   };
 }
