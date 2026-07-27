@@ -17,6 +17,7 @@
     <header class="titlebar">
       <div class="titlebar-drag"></div>
       <div class="titlebar-buttons">
+        <button class="btn-icon" id="btn-pin" title="항상 위에 고정" aria-pressed="false"></button>
         <button class="btn-icon" id="btn-settings" title="설정">⚙</button>
         <button class="btn-icon" id="btn-minimize" title="최소화">−</button>
         <button class="btn-icon" id="btn-close" title="닫기">×</button>
@@ -95,13 +96,8 @@
 
           <div class="divider"></div>
 
-          <section class="section section-general">
-            <div class="section-header">
-              <h2>할일</h2>
-            </div>
-            <ul class="todo-list" id="general-list"></ul>
-            <button class="btn-add" data-list="general">+ 추가</button>
-          </section>
+          <div id="sections-container"></div>
+          <button class="btn-add btn-add-section" id="btn-add-section" type="button">+ 섹션 추가</button>
         </div>
 
         <div id="alarm-view" class="view-panel hidden">

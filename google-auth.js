@@ -8,11 +8,15 @@ const DEFAULT_REDIRECT_PORT = 47829;
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const BASE_SCOPES = ['openid', 'email', 'profile'];
-const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+const CALENDAR_READONLY_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+const CALENDAR_EVENTS_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 
 function getOAuthScopes(options = {}) {
   const scopes = [...BASE_SCOPES];
-  if (options.includeCalendar) scopes.push(CALENDAR_SCOPE);
+  if (options.includeCalendar) {
+    scopes.push(CALENDAR_READONLY_SCOPE);
+    scopes.push(CALENDAR_EVENTS_SCOPE);
+  }
   return scopes;
 }
 
@@ -195,6 +199,7 @@ function buildGoogleAuthRecord(tokens, options = {}) {
       ? new Date(Date.now() + Number(tokens.expires_in) * 1000).toISOString()
       : '',
     calendarScopeGranted: Boolean(options.includeCalendar),
+    calendarWriteScopeGranted: Boolean(options.includeCalendar),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -303,6 +308,7 @@ function publicGoogleAuth(auth) {
     email: auth.email || '',
     name: auth.name || auth.email || '',
     calendarScopeGranted: Boolean(auth.calendarScopeGranted),
+    calendarWriteScopeGranted: Boolean(auth.calendarWriteScopeGranted),
   };
 }
 

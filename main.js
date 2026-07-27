@@ -11,7 +11,7 @@ const {
   getValidAccessToken,
   publicGoogleAuth,
 } = require('./google-auth');
-const { fetchCalendarEventsForDate } = require('./google-calendar');
+const { fetchCalendarEventsForDate, exportMemoItemsToCalendar } = require('./google-calendar');
 
 app.setName('Memos');
 
@@ -251,6 +251,7 @@ function openArchiveReportWindow(memoId) {
 }
 
 function createWindow() {
+  const config = loadConfig();
   mainWindow = new BrowserWindow({
     width: 332,
     height: 420,
@@ -260,7 +261,7 @@ function createWindow() {
     maxHeight: 600,
     frame: false,
     transparent: true,
-    alwaysOnTop: false,
+    alwaysOnTop: config.alwaysOnTop === true,
     resizable: true,
     skipTaskbar: false,
     webPreferences: {
@@ -268,6 +269,10 @@ function createWindow() {
       contextIsolation: true,
     },
   });
+
+  if (config.alwaysOnTop === true) {
+    mainWindow.setAlwaysOnTop(true, 'floating');
+  }
 
   mainWindow.loadFile('index.html');
 }
@@ -684,9 +689,11 @@ ipcMain.handle('google-login', async () => {
   const config = normalizeSyncConfig(loadConfig());
   const sameAccount = config.googleAuth?.sub && config.googleAuth.sub === auth.sub;
   const keepCalendarScope = sameAccount && config.googleAuth?.calendarScopeGranted;
+  const keepCalendarWriteScope = sameAccount && config.googleAuth?.calendarWriteScopeGranted;
   config.googleAuth = {
     ...auth,
     calendarScopeGranted: keepCalendarScope || auth.calendarScopeGranted,
+    calendarWriteScopeGranted: keepCalendarWriteScope || auth.calendarWriteScopeGranted,
   };
   if (!sameAccount) config.cloudPullEnabled = false;
   config.syncEnabled = true;
@@ -701,6 +708,7 @@ ipcMain.handle('google-request-calendar', async () => {
     ...(config.googleAuth || {}),
     ...auth,
     calendarScopeGranted: true,
+    calendarWriteScopeGranted: true,
   };
   config.syncEnabled = true;
   saveConfig(config);
@@ -723,6 +731,30 @@ ipcMain.handle('fetch-calendar-today', async (_, dateKey) => {
     throw new Error('invalid_date_key');
   }
   return fetchCalendarEventsForDate(accessToken, key);
+});
+
+ipcMain.handle('export-calendar-today', async (_, payload) => {
+  const accessToken = await getGoogleAccessToken();
+  const dateKey = String(payload?.dateKey || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    throw new Error('invalid_date_key');
+  }
+  return exportMemoItemsToCalendar(accessToken, dateKey, payload?.items || []);
+});
+
+ipcMain.handle('get-window-settings', () => {
+  const config = loadConfig();
+  return { alwaysOnTop: config.alwaysOnTop === true };
+});
+
+ipcMain.handle('set-always-on-top', (_, enabled) => {
+  const config = loadConfig();
+  config.alwaysOnTop = Boolean(enabled);
+  saveConfig(config);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setAlwaysOnTop(config.alwaysOnTop, 'floating');
+  }
+  return { alwaysOnTop: config.alwaysOnTop };
 });
 
 ipcMain.handle('sync-merge', (_, appState) => syncWithGoogle(appState));

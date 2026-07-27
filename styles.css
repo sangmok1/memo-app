@@ -661,11 +661,96 @@ body {
   margin-bottom: 6px;
 }
 
-.section-header h2 {
+.section-header h2,
+.section-title-input {
   font-size: 13px;
   font-weight: 700;
   color: rgba(0, 0, 0, 0.65);
   letter-spacing: -0.3px;
+}
+
+.section-title {
+  cursor: text;
+}
+
+.section-title-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  padding: 1px 6px;
+  background: rgba(255, 255, 255, 0.65);
+  font-family: inherit;
+}
+
+.btn-section-pin {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.35);
+  line-height: 0;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, opacity 0.15s;
+}
+
+.section-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.btn-section-delete {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.38);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+
+.section-header:hover .btn-section-delete {
+  color: rgba(0, 0, 0, 0.52);
+}
+
+.btn-section-delete:hover {
+  color: rgba(180, 40, 40, 0.85);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.btn-section-pin:hover,
+.btn-section-pin.pinned {
+  color: rgba(0, 0, 0, 0.62);
+}
+
+.section-custom.section-dragging {
+  opacity: 0.55;
+}
+
+.section-custom.section-drop-target .section-header {
+  outline: 1px dashed rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.btn-add-section {
+  margin-top: 4px;
+}
+
+.btn-icon.active {
+  color: rgba(0, 0, 0, 0.72);
+  background: rgba(0, 0, 0, 0.12);
 }
 
 .date {

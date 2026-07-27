@@ -23,6 +23,7 @@ function getMemoSyncGroupMeta(memo) {
 }
 
 const BELL_PATH = 'M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.9 2.49.4 4 2.42 4 4.9v6z';
+const PIN_PATH = 'M16 12V4h1V2H7v2h1v8l-2 2v1h5.2V22h1.6v-7H18v-1l-2-2z';
 
 function createBellSvg(hue, size = 16) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -32,6 +33,19 @@ function createBellSvg(hue, size = 16) {
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   path.setAttribute('fill', `hsl(${hue}, 72%, 52%)`);
   path.setAttribute('d', BELL_PATH);
+  svg.appendChild(path);
+  return svg;
+}
+
+function createPinSvg(size = 12) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('fill', 'currentColor');
+  path.setAttribute('d', PIN_PATH);
   svg.appendChild(path);
   return svg;
 }
@@ -76,13 +90,60 @@ function createEmptyMemo(id, syncGroupId) {
     createdAt: new Date().toISOString(),
     syncGroupId: syncGroupId || getDefaultSyncGroupId(),
     today: [createTodoItem()],
-    general: [createTodoItem()],
+    sections: [createMemoSection('할일', [createTodoItem()], true, 0)],
     savedDate: getDateKey(getKSTDate()),
     colorHue: 54,
     colorMode: 'hue',
     colorGray: 94,
     autoWrap: true,
   };
+}
+
+function createMemoSection(title, items, pinned = false, order = 0) {
+  return {
+    id: `sec-${createId()}`,
+    title: title || '새 섹션',
+    items: items?.length ? items : [createTodoItem()],
+    pinned: Boolean(pinned),
+    order,
+  };
+}
+
+function ensureMemoSections(memo) {
+  if (!memo || isAlarmBoard(memo)) return;
+  if (Array.isArray(memo.sections) && memo.sections.length) {
+    memo.sections.forEach((section, index) => {
+      if (!section.id) section.id = `sec-${createId()}`;
+      if (!section.title) section.title = '할일';
+      if (!Array.isArray(section.items) || !section.items.length) {
+        section.items = [createTodoItem()];
+      }
+      if (section.pinned === undefined) section.pinned = index === 0;
+      if (section.order === undefined) section.order = index;
+    });
+    delete memo.general;
+    return;
+  }
+
+  memo.sections = [
+    createMemoSection('할일', memo.general?.length ? memo.general : [createTodoItem()], true, 0),
+  ];
+  delete memo.general;
+}
+
+function getSectionById(memo, sectionId) {
+  ensureMemoSections(memo);
+  return memo.sections.find((section) => section.id === sectionId) || null;
+}
+
+function getOrderedSections(memo) {
+  ensureMemoSections(memo);
+  return [...memo.sections].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+function getRolloverTargetSection(memo) {
+  ensureMemoSections(memo);
+  return memo.sections.find((section) => section.pinned) || memo.sections[0];
 }
 
 function createEmptyAlarm(id, syncGroupId) {
@@ -127,8 +188,9 @@ function migrateData(raw) {
         item.onceAlarms = item.onceAlarms || [];
         item.recurringAlarms = item.recurringAlarms || [];
         if (item.popupSizePercent === undefined) item.popupSizePercent = 50;
-      } else if (item.autoWrap === undefined) {
-        item.autoWrap = true;
+      } else {
+        ensureMemoSections(item);
+        if (item.autoWrap === undefined) item.autoWrap = true;
       }
       if (!item.colorMode) item.colorMode = 'hue';
       if (item.colorGray === undefined) item.colorGray = item.type === 'alarm' ? 30 : 94;
@@ -138,6 +200,7 @@ function migrateData(raw) {
 
   const id = generateMemoId();
   const legacy = raw || {};
+  const legacyGeneral = legacy.general?.length ? legacy.general : [createTodoItem()];
   return {
     activeMemoId: id,
     memoOrder: [id],
@@ -148,7 +211,7 @@ function migrateData(raw) {
         type: 'memo',
         createdAt: new Date().toISOString(),
         today: legacy.today?.length ? legacy.today : [createTodoItem()],
-        general: legacy.general?.length ? legacy.general : [createTodoItem()],
+        sections: [createMemoSection('할일', legacyGeneral, true, 0)],
         savedDate: legacy.savedDate || getDateKey(getKSTDate()),
         colorHue: legacy.colorHue ?? 54,
         autoWrap: legacy.autoWrap !== false,
@@ -265,11 +328,14 @@ function updateDropIndicator(listEl, dropIndex, blockSize) {
 }
 
 function getListByType(listType) {
-  return listType === 'today' ? currentMemo.today : currentMemo.general;
+  if (listType === 'today') return currentMemo.today;
+  const section = getSectionById(currentMemo, listType);
+  return section ? section.items : [];
 }
 
 function getListEl(listType) {
-  return listType === 'today' ? todayListEl : generalListEl;
+  if (listType === 'today') return todayListEl;
+  return sectionListEls.get(listType) || null;
 }
 
 function saveData() {
@@ -300,7 +366,8 @@ let currentMemo = appState.memos[appState.activeMemoId];
 let lastCheckedDateKey = null;
 
 const todayListEl = document.getElementById('today-list');
-const generalListEl = document.getElementById('general-list');
+const sectionsContainerEl = document.getElementById('sections-container');
+const sectionListEls = new Map();
 const todayDateEl = document.getElementById('today-date');
 const memoListEl = document.getElementById('memo-list');
 const postitEl = document.querySelector('.postit');
@@ -315,6 +382,7 @@ const alarmFormModal = document.getElementById('alarm-form-modal');
 const deleteModal = document.getElementById('delete-modal');
 
 let pendingDeleteMemoId = null;
+let pendingDeleteSectionId = null;
 let editingAlarmContext = null;
 let alarmQueue = [];
 let isAlarmRingOpen = false;
@@ -351,9 +419,10 @@ async function archiveItems(memoId, dateKey, items) {
 async function handleDayRolloverForMemo(memo) {
   if (isAlarmBoard(memo)) return;
 
+  ensureMemoSections(memo);
   const todayKey = getTodayKey();
   memo.today.forEach(normalizeItemDepth);
-  memo.general.forEach(normalizeItemDepth);
+  memo.sections.forEach((section) => section.items.forEach(normalizeItemDepth));
 
   if (!memo.savedDate || memo.savedDate === todayKey) {
     if (!memo.savedDate) memo.savedDate = todayKey;
@@ -364,23 +433,28 @@ async function handleDayRolloverForMemo(memo) {
   const dateLabel = formatShortDateFromKey(yesterdayKey);
 
   const completedToday = memo.today.filter((t) => t.done && t.text.trim());
-  const completedGeneral = memo.general.filter((t) => t.done && t.text.trim());
-  const completed = [...completedToday, ...completedGeneral];
+  const completedSections = memo.sections.flatMap((section) =>
+    section.items.filter((t) => t.done && t.text.trim()),
+  );
+  const completed = [...completedToday, ...completedSections];
   if (completed.length > 0) {
     await archiveItems(memo.id, yesterdayKey, completed);
   }
 
+  const targetSection = getRolloverTargetSection(memo);
   const toMove = memo.today.filter((t) => t.text.trim() && !t.done);
   toMove.reverse().forEach((item) => {
     const text = item.text.trim();
     const suffix = `(${dateLabel})`;
     const newText = text.includes(suffix) ? text : `${text} (${dateLabel})`;
-    memo.general.unshift(createTodoItem(newText, item.depth || 0));
+    targetSection.items.unshift(createTodoItem(newText, item.depth || 0));
   });
 
   memo.today = [createTodoItem()];
-  memo.general = memo.general.filter((t) => !(t.done && t.text.trim()));
-  if (!memo.general.length) memo.general = [createTodoItem()];
+  memo.sections.forEach((section) => {
+    section.items = section.items.filter((t) => !(t.done && t.text.trim()));
+    if (!section.items.length) section.items = [createTodoItem()];
+  });
   memo.savedDate = getTodayKey();
   memo.updatedAt = new Date().toISOString();
 }
@@ -698,11 +772,237 @@ function renderList(listEl, items, listType) {
 }
 
 function renderAllLists() {
+  ensureMemoSections(currentMemo);
   if (!currentMemo.today?.length) currentMemo.today = [createTodoItem()];
-  if (!currentMemo.general?.length) currentMemo.general = [createTodoItem()];
   renderList(todayListEl, currentMemo.today, 'today');
-  renderList(generalListEl, currentMemo.general, 'general');
+  renderSections();
   refreshFindIfOpen();
+}
+
+let draggingSectionId = null;
+
+function startSectionTitleEdit(section, titleEl) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'section-title-input';
+  input.value = section.title;
+  input.maxLength = 40;
+
+  const finish = (save) => {
+    if (save) {
+      const next = input.value.trim();
+      if (next) section.title = next;
+      saveData();
+    }
+    renderAllLists();
+  };
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      finish(true);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      finish(false);
+    }
+  });
+  input.addEventListener('blur', () => finish(true));
+
+  titleEl.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+function reorderSection(fromId, toId) {
+  if (!fromId || !toId || fromId === toId) return;
+  const fromSection = getSectionById(currentMemo, fromId);
+  const toSection = getSectionById(currentMemo, toId);
+  if (!fromSection || !toSection || fromSection.pinned || toSection.pinned) return;
+
+  const ordered = getOrderedSections(currentMemo);
+  const movable = ordered.filter((section) => !section.pinned);
+  const fromIdx = movable.findIndex((section) => section.id === fromId);
+  const toIdx = movable.findIndex((section) => section.id === toId);
+  if (fromIdx < 0 || toIdx < 0) return;
+
+  const [moved] = movable.splice(fromIdx, 1);
+  movable.splice(toIdx, 0, moved);
+
+  const pinned = ordered.filter((section) => section.pinned);
+  pinned.forEach((section, index) => {
+    section.order = index;
+  });
+  const base = pinned.length;
+  movable.forEach((section, index) => {
+    section.order = base + index;
+  });
+
+  saveData();
+  renderAllLists();
+}
+
+function setupSectionDrag(sectionEl, section) {
+  sectionEl.addEventListener('dragstart', (e) => {
+    if (section.pinned) {
+      e.preventDefault();
+      return;
+    }
+    draggingSectionId = section.id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', section.id);
+    sectionEl.classList.add('section-dragging');
+  });
+
+  sectionEl.addEventListener('dragend', () => {
+    draggingSectionId = null;
+    sectionEl.classList.remove('section-dragging');
+    sectionsContainerEl?.querySelectorAll('.section-drop-target').forEach((el) => {
+      el.classList.remove('section-drop-target');
+    });
+  });
+
+  sectionEl.addEventListener('dragover', (e) => {
+    if (!draggingSectionId || draggingSectionId === section.id || section.pinned) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    sectionEl.classList.add('section-drop-target');
+  });
+
+  sectionEl.addEventListener('dragleave', (e) => {
+    if (!sectionEl.contains(e.relatedTarget)) {
+      sectionEl.classList.remove('section-drop-target');
+    }
+  });
+
+  sectionEl.addEventListener('drop', (e) => {
+    e.preventDefault();
+    sectionEl.classList.remove('section-drop-target');
+    const fromId = e.dataTransfer.getData('text/plain') || draggingSectionId;
+    if (fromId) reorderSection(fromId, section.id);
+    draggingSectionId = null;
+  });
+}
+
+function renderSections() {
+  if (!sectionsContainerEl) return;
+  ensureMemoSections(currentMemo);
+  sectionsContainerEl.innerHTML = '';
+  sectionListEls.clear();
+
+  const ordered = getOrderedSections(currentMemo);
+  ordered.forEach((section, index) => {
+    if (index > 0) {
+      const divider = document.createElement('div');
+      divider.className = 'divider';
+      sectionsContainerEl.appendChild(divider);
+    }
+
+    const sectionEl = document.createElement('section');
+    sectionEl.className = 'section section-custom';
+    sectionEl.dataset.sectionId = section.id;
+    if (!section.pinned) sectionEl.draggable = true;
+
+    const header = document.createElement('div');
+    header.className = 'section-header';
+
+    const title = document.createElement('h2');
+    title.className = 'section-title';
+    title.textContent = section.title;
+    title.title = '더블클릭하여 이름 수정';
+    title.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      startSectionTitleEdit(section, title);
+    });
+
+    const pinBtn = document.createElement('button');
+    pinBtn.type = 'button';
+    pinBtn.className = 'btn-section-pin' + (section.pinned ? ' pinned' : '');
+    pinBtn.title = section.pinned ? '위치 고정 해제' : '위치 고정';
+    pinBtn.appendChild(createPinSvg(11));
+    pinBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      section.pinned = !section.pinned;
+      saveData();
+      renderAllLists();
+    });
+
+    const headerActions = document.createElement('div');
+    headerActions.className = 'section-header-actions';
+    headerActions.appendChild(pinBtn);
+
+    if (canDeleteSection(currentMemo, section.id)) {
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'btn-section-delete';
+      deleteBtn.title = '섹션 삭제';
+      deleteBtn.textContent = '×';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        promptDeleteSection(section.id);
+      });
+      headerActions.appendChild(deleteBtn);
+    }
+
+    header.append(title, headerActions);
+
+    const listEl = document.createElement('ul');
+    listEl.className = 'todo-list';
+    listEl.id = `section-list-${section.id}`;
+    sectionListEls.set(section.id, listEl);
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn-add';
+    addBtn.type = 'button';
+    addBtn.textContent = '+ 추가';
+    addBtn.addEventListener('click', () => addItem(section.id));
+
+    sectionEl.append(header, listEl, addBtn);
+    sectionsContainerEl.appendChild(sectionEl);
+
+    renderList(listEl, section.items, section.id);
+    setupDropZone(listEl, section.id);
+    if (!section.pinned) setupSectionDrag(sectionEl, section);
+  });
+}
+
+function addSection(title = '새 섹션') {
+  ensureMemoSections(currentMemo);
+  const maxOrder = Math.max(-1, ...currentMemo.sections.map((section) => section.order ?? 0));
+  currentMemo.sections.push(createMemoSection(title, [createTodoItem()], false, maxOrder + 1));
+  saveData();
+  renderAllLists();
+}
+
+function canDeleteSection(memo, sectionId) {
+  ensureMemoSections(memo);
+  if (memo.sections.length <= 1) return false;
+  const ordered = getOrderedSections(memo);
+  const index = ordered.findIndex((section) => section.id === sectionId);
+  return index > 0;
+}
+
+function promptDeleteSection(sectionId) {
+  const section = getSectionById(currentMemo, sectionId);
+  if (!section || !canDeleteSection(currentMemo, sectionId)) return;
+
+  pendingDeleteMemoId = null;
+  pendingDeleteSectionId = sectionId;
+  const hasContent = section.items.some((item) => item.text.trim());
+  document.getElementById('delete-modal-title').textContent = '섹션 삭제';
+  document.getElementById('delete-modal-message').innerHTML = hasContent
+    ? `<strong>${section.title}</strong> 섹션과 안의 할일이 삭제됩니다.`
+    : `<strong>${section.title}</strong> 섹션을 삭제하시겠습니까?`;
+  deleteModal.classList.remove('hidden');
+}
+
+function deleteSection(sectionId) {
+  ensureMemoSections(currentMemo);
+  if (!canDeleteSection(currentMemo, sectionId)) return;
+
+  currentMemo.sections = currentMemo.sections.filter((section) => section.id !== sectionId);
+  saveData();
+  closeDeleteModal();
+  renderAllLists();
 }
 
 function renderAlarmList(listEl, alarms, recurring) {
@@ -960,6 +1260,7 @@ function refreshActiveUI() {
 
 function promptDeleteMemo(memoId) {
   if (appState.memoOrder.length <= 1 || !appState.memos[memoId]) return;
+  pendingDeleteSectionId = null;
   pendingDeleteMemoId = memoId;
   const target = appState.memos[memoId];
   const isAlarm = isAlarmBoard(target);
@@ -972,6 +1273,7 @@ function promptDeleteMemo(memoId) {
 
 function closeDeleteModal() {
   pendingDeleteMemoId = null;
+  pendingDeleteSectionId = null;
   deleteModal.classList.add('hidden');
 }
 
@@ -1215,18 +1517,21 @@ function checkAllAlarms() {
 
 function buildSummary() {
   const date = formatKSTDate(getKSTDate());
+  ensureMemoSections(currentMemo);
   const completedToday = currentMemo.today.filter((t) => t.done && t.text.trim());
-  const completedGeneral = currentMemo.general.filter((t) => t.done && t.text.trim());
+  const completedSections = currentMemo.sections.flatMap((section) =>
+    section.items.filter((t) => t.done && t.text.trim()),
+  );
 
-  if (completedToday.length === 0 && completedGeneral.length === 0) {
+  if (completedToday.length === 0 && completedSections.length === 0) {
     return `${date}\n\n완료한 일이 없습니다.`;
   }
 
   const lines = [];
 
   completedToday.forEach((t) => lines.push(formatSummaryLine(t.text, t.depth || 0)));
-  if (completedToday.length > 0 && completedGeneral.length > 0) lines.push('');
-  completedGeneral.forEach((t) => lines.push(formatSummaryLine(t.text, t.depth || 0)));
+  if (completedToday.length > 0 && completedSections.length > 0) lines.push('');
+  completedSections.forEach((t) => lines.push(formatSummaryLine(t.text, t.depth || 0)));
 
   return lines.join('\n');
 }
@@ -1373,7 +1678,8 @@ document.getElementById('btn-delete-memo').addEventListener('click', () => {
 });
 
 document.getElementById('btn-confirm-delete').addEventListener('click', () => {
-  if (pendingDeleteMemoId) deleteMemo(pendingDeleteMemoId);
+  if (pendingDeleteSectionId) deleteSection(pendingDeleteSectionId);
+  else if (pendingDeleteMemoId) deleteMemo(pendingDeleteMemoId);
 });
 
 document.getElementById('btn-cancel-delete').addEventListener('click', closeDeleteModal);
@@ -1479,6 +1785,74 @@ function mergeCalendarEventsIntoToday(memo, events, dateKey) {
   return { added, updated, removed, changed };
 }
 
+async function ensureCalendarWriteAccess(config, options = {}) {
+  if (config.googleAuth?.calendarWriteScopeGranted) return config;
+  if (options.silent || options.skipAuthPrompt) return config;
+  if (!window.electronAPI?.googleRequestCalendar) {
+    throw new Error('calendar_permission_denied');
+  }
+  syncConfigCache = await window.electronAPI.googleRequestCalendar();
+  return syncConfigCache;
+}
+
+async function exportTodayMemosToCalendar(dateKey, options = {}) {
+  if (!window.electronAPI?.exportCalendarToday || !currentMemo || isAlarmBoard(currentMemo)) {
+    return { exported: 0, updated: 0, skipped: true };
+  }
+
+  let config = syncConfigCache?.googleAuth?.email
+    ? syncConfigCache
+    : await window.electronAPI.getSyncConfig();
+
+  if (!config.googleAuth?.email) {
+    if (options.silent) return { exported: 0, updated: 0, skipped: true };
+    throw new Error('google_not_signed_in');
+  }
+
+  if (!config.googleAuth?.calendarWriteScopeGranted) {
+    if (options.silent || options.skipAuthPrompt) {
+      return { exported: 0, updated: 0, skipped: true };
+    }
+    config = await ensureCalendarWriteAccess(config, options);
+    if (!config.googleAuth?.calendarWriteScopeGranted) {
+      return { exported: 0, updated: 0, skipped: true };
+    }
+  }
+
+  const items = (currentMemo.today || []).filter((item) => item.text?.trim() && !item.done);
+  if (!items.length) return { exported: 0, updated: 0, skipped: true };
+
+  let result;
+  try {
+    result = await window.electronAPI.exportCalendarToday({ dateKey, items });
+  } catch (err) {
+    if (err.message !== 'calendar_permission_denied') throw err;
+    if (options.silent || options.skipAuthPrompt) {
+      return { exported: 0, updated: 0, skipped: true, permissionDenied: true };
+    }
+    if (!window.electronAPI?.googleRequestCalendar) {
+      throw new Error('calendar_permission_denied');
+    }
+    syncConfigCache = await window.electronAPI.googleRequestCalendar();
+    if (!syncConfigCache.googleAuth?.calendarWriteScopeGranted) {
+      throw new Error('calendar_permission_denied');
+    }
+    result = await window.electronAPI.exportCalendarToday({ dateKey, items });
+  }
+
+  (result.updates || []).forEach((update) => {
+    const item = currentMemo.today.find((todo) => todo.id === update.id);
+    if (!item) return;
+    item.exportedCalendarEventId = update.exportedCalendarEventId;
+    item.exportedCalendarDate = update.exportedCalendarDate;
+  });
+
+  if ((result.exported || 0) > 0 || (result.updated || 0) > 0) {
+    saveAppState({ skipSync: true });
+  }
+  return result;
+}
+
 async function importCalendarToToday(options = {}) {
   if (!window.electronAPI?.fetchCalendarToday || !currentMemo || isAlarmBoard(currentMemo)) {
     return { added: 0, skipped: true };
@@ -1524,12 +1898,24 @@ async function importCalendarToToday(options = {}) {
   }
 
   const mergeResult = mergeCalendarEventsIntoToday(currentMemo, events, dateKey);
-  if (mergeResult.changed || options.alwaysSave) {
+  let exportResult = { exported: 0, updated: 0 };
+  try {
+    exportResult = await exportTodayMemosToCalendar(dateKey, {
+      silent: options.silent,
+      skipAuthPrompt: options.skipAuthPrompt,
+    });
+  } catch (err) {
+    if (!options.silent) throw err;
+  }
+
+  if (mergeResult.changed || exportResult.exported > 0 || exportResult.updated > 0 || options.alwaysSave) {
     saveAppState({ skipSync: true });
     renderAllLists();
   }
   return {
     ...mergeResult,
+    exported: exportResult.exported || 0,
+    exportUpdated: exportResult.updated || 0,
     total: events?.length || 0,
   };
 }
@@ -1584,10 +1970,17 @@ async function handleImportCalendarClick() {
     if (btn) btn.disabled = true;
 
     const result = await importCalendarToToday({ promptLogin: true, alwaysSave: true });
+    const exportMsg = result.exported > 0
+      ? `\n메모 ${result.exported}개를 캘린더에 추가했습니다.`
+      : result.exportUpdated > 0
+        ? '\n캘린더 일정을 업데이트했습니다.'
+        : '';
     if (result.added > 0) {
-      alert(`캘린더 일정 ${result.added}개를 오늘 할일에 추가했습니다.`);
+      alert(`캘린더 일정 ${result.added}개를 오늘 할일에 추가했습니다.${exportMsg}`);
     } else if (result.updated > 0 || result.removed > 0) {
-      alert('캘린더 일정을 업데이트했습니다.');
+      alert(`캘린더 일정을 업데이트했습니다.${exportMsg}`);
+    } else if (result.exported > 0 || result.exportUpdated > 0) {
+      alert(`오늘 할일 메모를 캘린더에 반영했습니다.${exportMsg}`);
     } else if (result.total > 0) {
       alert('오늘 캘린더 일정은 이미 반영되어 있습니다.');
     } else {
@@ -1834,7 +2227,30 @@ if (window.electronAPI) {
 }
 
 setupDropZone(todayListEl, 'today');
-setupDropZone(generalListEl, 'general');
+
+document.getElementById('btn-add-section')?.addEventListener('click', () => addSection());
+
+const pinBtn = document.getElementById('btn-pin');
+if (pinBtn) {
+  pinBtn.textContent = '';
+  pinBtn.appendChild(createPinSvg(13));
+}
+if (pinBtn && window.electronAPI?.getWindowSettings) {
+  window.electronAPI.getWindowSettings().then(({ alwaysOnTop }) => {
+    pinBtn.classList.toggle('active', alwaysOnTop);
+    pinBtn.setAttribute('aria-pressed', alwaysOnTop ? 'true' : 'false');
+  });
+  pinBtn.addEventListener('click', async () => {
+    const next = !pinBtn.classList.contains('active');
+    try {
+      const result = await window.electronAPI.setAlwaysOnTop(next);
+      pinBtn.classList.toggle('active', result.alwaysOnTop);
+      pinBtn.setAttribute('aria-pressed', result.alwaysOnTop ? 'true' : 'false');
+    } catch {}
+  });
+} else if (pinBtn) {
+  pinBtn.style.display = 'none';
+}
 
 const findBarEl = document.getElementById('find-bar');
 const findInputEl = document.getElementById('find-input');
