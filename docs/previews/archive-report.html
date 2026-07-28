@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=520">
+  <title>Memos Archive Preview</title>
+  <link rel="stylesheet" href="../css/archive-report.css">
+  <style>
+    html, body { width: 520px; height: 520px; overflow: hidden; }
+    .report-window { height: 520px; max-width: 520px; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.1); }
+    .report-scroll { padding: 16px 20px; }
+    .report-journal { padding: 20px 24px; min-height: auto; }
+  </style>
+</head>
+<body>
+  <div class="report-window">
+    <header class="report-toolbar">
+      <div class="report-controls">
+        <select class="report-select" aria-hidden="true">
+          <option selected>주간</option>
+        </select>
+        <input type="date" class="report-date-input" value="2026-07-28" aria-hidden="true">
+      </div>
+      <div class="report-week-row">
+        <span class="report-week-label">주 시작</span>
+        <div class="day-picker">
+          <button type="button" class="day-btn active">월</button>
+          <button type="button" class="day-btn">화</button>
+          <button type="button" class="day-btn">수</button>
+          <button type="button" class="day-btn">목</button>
+          <button type="button" class="day-btn">금</button>
+          <button type="button" class="day-btn">토</button>
+          <button type="button" class="day-btn">일</button>
+        </div>
+      </div>
+      <p class="report-range-label">2026. 7. 28 (월) – 8. 3 (일)</p>
+    </header>
+    <div class="report-scroll">
+      <article class="report-journal">
+        <div class="journal-header">
+          <div class="journal-kicker">완료 기록</div>
+          <h1 class="journal-title">7월 4주차 · 한 일 정리</h1>
+          <p class="journal-meta">Memos · 기간별 보기</p>
+        </div>
+        <div class="journal-day">
+          <h2 class="journal-day-title">7월 28일 (월)</h2>
+          <ul class="journal-list">
+            <li class="journal-item">팀 미팅 준비</li>
+            <li class="journal-item">이메일 확인</li>
+            <li class="journal-item sub">회신 3건</li>
+          </ul>
+        </div>
+        <div class="journal-day">
+          <h2 class="journal-day-title">7월 27일 (일)</h2>
+          <ul class="journal-list">
+            <li class="journal-item">주간 회고 작성</li>
+            <li class="journal-item">운동 30분</li>
+          </ul>
+        </div>
+        <div class="journal-footer">총 <strong>5</strong>건 완료</div>
+      </article>
+    </div>
+    <footer class="report-footer">
+      <button type="button" class="btn-report-action btn-close-win">닫기</button>
+      <button type="button" class="btn-report-action">복사</button>
+      <button type="button" class="btn-report-action btn-primary">파일 저장</button>
+    </footer>
+  </div>
+</body>
+</html>

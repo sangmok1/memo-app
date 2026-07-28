@@ -14,6 +14,8 @@
       <a class="logo" href="./">Memos</a>
       <nav class="nav">
         <a href="#features">기능</a>
+        <a href="#archive">완료 기록</a>
+        <a href="#sync">동기화</a>
         <a href="#calendar">캘린더</a>
         <a href="#download">다운로드</a>
         <a class="nav-gh" href="https://github.com/sangmok1/memo-app" target="_blank" rel="noopener">GitHub</a>
@@ -28,7 +30,7 @@
         <h1>바탕화면에 붙여두는<br>할일 메모</h1>
         <p class="lead">
           포스트잇처럼 가볍게 켜두고, 오늘 할일 · 섹션 · 알람을 한곳에서.
-          Google 로그인으로 기기 간 동기화, 캘린더와 양방향 연동까지.
+          완료한 일은 주간·월간으로 정리하고, Google 로그인으로 Mac · Windows 어디서든 같은 메모를 이어 씁니다.
         </p>
         <div class="hero-cta">
           <a class="btn btn-primary" href="https://github.com/sangmok1/memo-app/releases/latest" target="_blank" rel="noopener">무료 다운로드</a>
@@ -65,11 +67,11 @@
 
         <article class="feature-card">
           <div class="feature-preview">
-            <iframe src="previews/sync-settings.html" title="Google 동기화 설정" loading="lazy" tabindex="-1"></iframe>
+            <iframe src="previews/color-settings.html" title="메모 색상 설정" loading="lazy" tabindex="-1"></iframe>
           </div>
           <div class="feature-body">
-            <h3>Google 로그인 동기화</h3>
-            <p>계정 하나로 메모를 클라우드에 저장. <strong>불러오기</strong> · <strong>지금 동기화</strong> · 3시간마다 자동 sync. Mac과 Windows 사이에서도 그대로 이어집니다.</p>
+            <h3>메모 색상 · 마음대로</h3>
+            <p>⚙ 설정에서 <strong>색상 슬라이더</strong>로 메모지 색을 바꿉니다. 메모마다 다른 색 탭 — 업무는 노랑, 개인은 파랑처럼 구분해 두세요.</p>
           </div>
         </article>
 
@@ -82,6 +84,60 @@
             <p>메모와 별도 알람 보드. 시간이 되면 화면 중앙에 크게 알림. 물 마시기, 병원 예약 같은 반복 알람도 등록할 수 있습니다.</p>
           </div>
         </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="spotlight spotlight-archive" id="archive">
+    <div class="wrap spotlight-grid">
+      <div class="spotlight-copy">
+        <p class="eyebrow">완료 기록</p>
+        <h2>한 일 저장 · 주간 · 월간 정리</h2>
+        <p>
+          체크한 할일은 <strong>archive</strong>에 날짜별로 자동 저장됩니다.
+          ⚙ <strong>기간별 보기</strong>에서 주간 · 월간 · 분기 · 반기 · 년 단위로 모아 보고, 복사하거나 파일로 저장할 수 있습니다.
+        </p>
+        <ul class="spotlight-list">
+          <li>매일 완료 항목 → JSON + Markdown 기록</li>
+          <li>「오늘 한일 정리하기」로 당일 요약</li>
+          <li>주 시작 요일 선택 (월~일)</li>
+          <li>회고 · 보고용 텍스트 바로 복사</li>
+        </ul>
+      </div>
+      <div class="spotlight-preview preview-shell-wide">
+        <iframe src="previews/archive-report.html" title="주간 완료 기록" loading="lazy" tabindex="-1"></iframe>
+        <p class="preview-caption">실제 기간별 보기 UI</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="spotlight spotlight-sync" id="sync">
+    <div class="wrap spotlight-grid spotlight-grid-reverse">
+      <div class="spotlight-preview">
+        <div class="preview-shell">
+          <iframe src="previews/sync-settings.html" title="Google 동기화" loading="lazy" tabindex="-1"></iframe>
+        </div>
+        <div class="sync-flow" aria-hidden="true">
+          <span class="sync-device">Mac</span>
+          <span class="sync-arrow">↔</span>
+          <span class="sync-cloud">Google Cloud</span>
+          <span class="sync-arrow">↔</span>
+          <span class="sync-device">Windows</span>
+        </div>
+      </div>
+      <div class="spotlight-copy">
+        <p class="eyebrow">Google 로그인 동기화</p>
+        <h2>어디서든 같은 메모</h2>
+        <p>
+          집 Mac에서 쓰다가 회사 Windows에서 이어 쓰기 — Google 계정 하나면 됩니다.
+          메모 · 섹션 · 할일 목록이 클라우드에 저장되고, <strong>불러오기</strong> · <strong>지금 동기화</strong> · 3시간마다 자동 sync로 맞춰집니다.
+        </p>
+        <ul class="spotlight-list">
+          <li>Mac ↔ Windows 크로스 플랫폼</li>
+          <li>새 기기: 업로드 후 선택적 불러오기</li>
+          <li>메모별 archive도 함께 sync</li>
+          <li>동기화 키 없이 Google 로그인만</li>
+        </ul>
       </div>
     </div>
   </section>
@@ -108,8 +164,8 @@
         <li>타이틀바 <strong>핀</strong> — 창을 항상 맨 위에 고정</li>
         <li>드래그앤드롭으로 오늘 할일 ↔ 섹션 이동</li>
         <li>자정(KST) 지나면 미완료 항목 자동 정리</li>
-        <li>완료 기록 archive · 기간별 보기</li>
-        <li>메모 색상 · 자동 줄바꿈 · 로그인 시 자동 실행</li>
+        <li>완료 기록 <strong>archive</strong> · ⚙ 기간별 보기</li>
+        <li>메모 색상 슬라이더 · 자동 줄바꿈 · 로그인 시 자동 실행</li>
       </ul>
     </div>
   </section>

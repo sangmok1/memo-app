@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=380">
+  <title>Memos Color Preview</title>
+  <link rel="stylesheet" href="../css/styles.css">
+  <style>
+    html, body { width: 380px; height: 520px; overflow: hidden; background: #e8e4dc; }
+    .app-shell { width: 380px; height: 520px; }
+    .postit { height: 520px; border-radius: 8px; --hue: 200; background: linear-gradient(145deg, hsl(200, 80%, 88%) 0%, hsl(200, 85%, 78%) 50%, hsl(200, 80%, 72%) 100%); }
+    .settings-panel { display: block !important; padding-bottom: 8px; }
+    .color-slider { --hue: 200; background: linear-gradient(to right, hsl(0,70%,55%), hsl(60,70%,55%), hsl(120,70%,55%), hsl(180,70%,55%), hsl(240,70%,55%), hsl(300,70%,55%), hsl(360,70%,55%)); }
+    .tab-demo { width: 18px; height: 18px; border-radius: 4px; border: 2px solid transparent; flex-shrink: 0; }
+    .tab-demo.t1 { background: hsl(54, 75%, 72%); }
+    .tab-demo.t2 { background: hsl(200, 75%, 72%); border-color: rgba(255,255,255,0.85); box-shadow: 0 0 0 1px rgba(0,0,0,0.15); }
+    .tab-demo.t3 { background: hsl(320, 75%, 72%); }
+    .tab-demo.t4 { background: hsl(0, 0%, 35%); }
+    .color-tabs-demo {
+      display: flex; gap: 6px; align-items: center;
+      margin: 8px 0 12px; padding: 8px 10px;
+      background: rgba(255,255,255,0.35); border-radius: 8px;
+    }
+    .color-tabs-label { font-size: 11px; color: rgba(0,0,0,0.45); margin-right: 4px; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="memo-sidebar">
+      <div class="memo-list">
+        <button class="memo-tab sync-tab sync-g1" style="--tab-hue: 54; background: hsl(54, 75%, 72%);"></button>
+        <button class="memo-tab active sync-tab sync-g2" style="--tab-hue: 200; background: hsl(200, 75%, 72%);"></button>
+        <button class="memo-tab sync-tab sync-g3" style="--tab-hue: 320; background: hsl(320, 75%, 72%);"></button>
+        <button class="memo-tab sync-tab sync-g4" style="background: hsl(0, 0%, 35%);"></button>
+      </div>
+      <button class="btn-new-memo">+</button>
+    </aside>
+    <div class="postit">
+      <header class="titlebar">
+        <div class="titlebar-drag"></div>
+        <div class="titlebar-buttons">
+          <button class="btn-icon active">⚙</button>
+          <button class="btn-icon">−</button>
+          <button class="btn-icon">×</button>
+        </div>
+      </header>
+      <div class="settings-panel">
+        <label class="color-label">메모 색상</label>
+        <input type="range" class="color-slider" min="0" max="360" value="200">
+        <div class="color-tabs-demo">
+          <span class="color-tabs-label">메모마다</span>
+          <span class="tab-demo t1"></span>
+          <span class="tab-demo t2"></span>
+          <span class="tab-demo t3"></span>
+          <span class="tab-demo t4"></span>
+        </div>
+        <p style="font-size:11px;color:rgba(0,0,0,0.42);margin-bottom:10px;line-height:1.5;">
+          슬라이더로 색상 ring · 흑백(숨김) 전환 · 메모 탭마다 다른 색
+        </p>
+        <label class="setting-row"><input type="checkbox" checked><span>자동 줄바꿈</span></label>
+      </div>
+      <main class="content" style="opacity:0.3;pointer-events:none;">
+        <div class="scroll-area">
+          <section class="section section-today">
+            <div class="section-header"><h2>오늘 할일</h2><span class="date">2026년 7월 28일 (월)</span></div>
+            <ul class="todo-list"><li class="todo-item"><span class="drag-handle">⠿</span><input type="checkbox"><button class="btn-indent" disabled>›</button><div class="todo-text wrap">파란 메모 예시</div></li></ul>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
