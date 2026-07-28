@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Memos — macOS·Windows용 포스트잇 스타일 할일 메모. Google 동기화, 캘린더 연동, 커스텀 섹션, 알람.">
+  <meta name="theme-color" content="#f5e6a8">
+  <title>Memos — 데스크톱 할일 메모</title>
+  <link rel="stylesheet" href="landing.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="logo" href="./">Memos</a>
+      <nav class="nav">
+        <a href="#features">기능</a>
+        <a href="#calendar">캘린더</a>
+        <a href="#download">다운로드</a>
+        <a class="nav-gh" href="https://github.com/sangmok1/memo-app" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">v1.3.0 · macOS · Windows</p>
+        <h1>바탕화면에 붙여두는<br>할일 메모</h1>
+        <p class="lead">
+          포스트잇처럼 가볍게 켜두고, 오늘 할일 · 섹션 · 알람을 한곳에서.
+          Google 로그인으로 기기 간 동기화, 캘린더와 양방향 연동까지.
+        </p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="https://github.com/sangmok1/memo-app/releases/latest" target="_blank" rel="noopener">무료 다운로드</a>
+          <a class="btn btn-ghost" href="https://github.com/sangmok1/memo-app" target="_blank" rel="noopener">소스 코드</a>
+        </div>
+        <ul class="hero-tags">
+          <li>터미널 불필요</li>
+          <li>Apple Silicon · Intel</li>
+          <li>공증 Mac 빌드</li>
+        </ul>
+      </div>
+      <div class="hero-preview">
+        <div class="preview-shell">
+          <iframe src="previews/memo-main.html" title="Memos 앱 미리보기" loading="lazy" tabindex="-1"></iframe>
+        </div>
+        <p class="preview-caption">실제 앱 UI · 동일 CSS</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="wrap">
+      <h2 class="section-title">이런 것들이 됩니다</h2>
+      <div class="feature-grid">
+        <article class="feature-card">
+          <div class="feature-preview">
+            <iframe src="previews/memo-main.html" title="섹션·핀·오늘 할일" loading="lazy" tabindex="-1"></iframe>
+          </div>
+          <div class="feature-body">
+            <h3>오늘 할일 · 커스텀 섹션</h3>
+            <p>오늘 집중할 일은 상단에 고정. <strong>할일</strong> 외에 <strong>개인 메모</strong> 등 섹션을 추가하고, 핀으로 위치를 고정하거나 드래그로 순서를 바꿉니다.</p>
+          </div>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-preview">
+            <iframe src="previews/sync-settings.html" title="Google 동기화 설정" loading="lazy" tabindex="-1"></iframe>
+          </div>
+          <div class="feature-body">
+            <h3>Google 로그인 동기화</h3>
+            <p>계정 하나로 메모를 클라우드에 저장. <strong>불러오기</strong> · <strong>지금 동기화</strong> · 3시간마다 자동 sync. Mac과 Windows 사이에서도 그대로 이어집니다.</p>
+          </div>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-preview">
+            <iframe src="previews/alarm.html" title="알람 보드" loading="lazy" tabindex="-1"></iframe>
+          </div>
+          <div class="feature-body">
+            <h3>1회성 · 주기적 알람</h3>
+            <p>메모와 별도 알람 보드. 시간이 되면 화면 중앙에 크게 알림. 물 마시기, 병원 예약 같은 반복 알람도 등록할 수 있습니다.</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="calendar-block" id="calendar">
+    <div class="wrap calendar-inner">
+      <div class="calendar-copy">
+        <h2>Google 캘린더 양방향</h2>
+        <div class="format-cards">
+          <div class="format-card">
+            <span class="format-label">캘린더 → 메모</span>
+            <code>팀 미팅 14:00 [캘린더]</code>
+            <p>오늘 일정을 <strong>오늘 할일</strong>에 자동 반영</p>
+          </div>
+          <div class="format-card">
+            <span class="format-label">메모 → 캘린더</span>
+            <code>[보고] 주간 정리 (15:30)</code>
+            <p>형식에 맞으면 Google Calendar에 일정 생성</p>
+          </div>
+        </div>
+        <p class="calendar-note">캘린더 일정 추가 버튼 · 자동 추가 시 import와 export가 함께 동작합니다.</p>
+      </div>
+      <ul class="check-list">
+        <li>타이틀바 <strong>핀</strong> — 창을 항상 맨 위에 고정</li>
+        <li>드래그앤드롭으로 오늘 할일 ↔ 섹션 이동</li>
+        <li>자정(KST) 지나면 미완료 항목 자동 정리</li>
+        <li>완료 기록 archive · 기간별 보기</li>
+        <li>메모 색상 · 자동 줄바꿈 · 로그인 시 자동 실행</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="download" id="download">
+    <div class="wrap download-inner">
+      <h2>바로 써보기</h2>
+      <p>Node.js 없이 다운로드만으로 실행됩니다.</p>
+      <div class="download-cards">
+        <a class="download-card" href="https://github.com/sangmok1/memo-app/releases/latest" target="_blank" rel="noopener">
+          <span class="os">macOS</span>
+          <strong>Memos.zip</strong>
+          <span>Universal · Apple Silicon + Intel</span>
+        </a>
+        <a class="download-card" href="https://github.com/sangmok1/memo-app/releases/latest" target="_blank" rel="noopener">
+          <span class="os">Windows</span>
+          <strong>Memos Setup</strong>
+          <span>설치형 exe</span>
+        </a>
+      </div>
+      <details class="install-help">
+        <summary>Mac 설치 · 실행 안 될 때</summary>
+        <ol>
+          <li>zip <strong>완전히</strong> 압축 해제 (미리보기 안에서 바로 실행 X)</li>
+          <li><code>Memos.app</code> → Applications로 이동</li>
+          <li>안 열리면: <code>xattr -cr /Applications/Memos.app && open /Applications/Memos.app</code></li>
+        </ol>
+        <p>v1.3.0부터 Apple 공증(Notarized) 빌드가 Releases에 포함됩니다.</p>
+      </details>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <p>MIT · <a href="https://github.com/sangmok1/memo-app">sangmok1/memo-app</a></p>
+      <p><a href="https://github.com/sangmok1/memo-app/releases/latest">최신 릴리스</a> · <a href="../README.md">README</a></p>
+    </div>
+  </footer>
+</body>
+</html>

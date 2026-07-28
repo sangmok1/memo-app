@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=380">
+  <title>Memos Settings Preview</title>
+  <link rel="stylesheet" href="../css/styles.css">
+  <style>
+    html, body { width: 380px; height: 520px; overflow: hidden; background: #e8e4dc; }
+    .app-shell { width: 380px; height: 520px; }
+    .postit { height: 520px; border-radius: 8px; }
+    .settings-panel { display: block !important; }
+    .preview-pin svg { width: 13px; height: 13px; display: block; }
+    .preview-pin path { fill: currentColor; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="memo-sidebar">
+      <div class="memo-list">
+        <button class="memo-tab active sync-tab sync-g1" style="--tab-hue: 54"></button>
+      </div>
+      <button class="btn-new-memo">+</button>
+    </aside>
+    <div class="postit" style="--hue: 54">
+      <header class="titlebar">
+        <div class="titlebar-drag"></div>
+        <div class="titlebar-buttons">
+          <button class="btn-icon preview-pin" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M16 12V4h1V2H7v2h1v8l-2 2v1h5.2V22h1.6v-7H18v-1l-2-2z"/></svg>
+          </button>
+          <button class="btn-icon active">⚙</button>
+          <button class="btn-icon">−</button>
+          <button class="btn-icon">×</button>
+        </div>
+      </header>
+      <div class="settings-panel">
+        <label class="color-label">메모 색상</label>
+        <input type="range" class="color-slider" min="0" max="360" value="54">
+        <label class="setting-row"><input type="checkbox" checked><span>자동 줄바꿈</span></label>
+        <label class="setting-row"><input type="checkbox" checked><span>컴퓨터 켤 때 자동 실행</span></label>
+        <div class="settings-archive-row">
+          <button class="btn-archive-link">폴더 열기</button>
+          <span class="settings-archive-sep">·</span>
+          <button class="btn-archive-link">기간별 보기</button>
+        </div>
+        <div class="settings-sync-block">
+          <div class="sync-toggle-row">
+            <label class="setting-row sync-toggle-item"><input type="checkbox" checked> Google 로그인 동기화</label>
+            <label class="setting-row sync-toggle-item"><input type="checkbox" checked> 캘린더 자동 추가</label>
+          </div>
+          <div class="sync-signed-in-block">
+            <div class="google-account-label">user@gmail.com</div>
+            <div class="settings-sync-row">
+              <button class="btn-archive-link">로그아웃</button>
+              <span class="settings-archive-sep">·</span>
+              <button class="btn-archive-link">불러오기</button>
+              <span class="settings-archive-sep">·</span>
+              <button class="btn-archive-link">지금 동기화</button>
+            </div>
+          </div>
+        </div>
+        <button class="btn-delete-memo">이 메모 삭제</button>
+      </div>
+      <main class="content" style="opacity: 0.35; pointer-events: none;">
+        <div class="scroll-area">
+          <section class="section section-today">
+            <div class="section-header"><h2>오늘 할일</h2><span class="date">2026년 7월 28일 (월)</span></div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

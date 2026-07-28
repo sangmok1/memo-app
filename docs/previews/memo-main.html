@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=380">
+  <title>Memos Preview</title>
+  <link rel="stylesheet" href="../css/styles.css">
+  <style>
+    html, body { width: 380px; height: 520px; overflow: hidden; background: #e8e4dc; }
+    .app-shell { width: 380px; height: 520px; }
+    .postit { height: 520px; border-radius: 8px; }
+    .memo-sidebar { border-radius: 8px 0 0 8px; }
+    .preview-pin svg { width: 13px; height: 13px; display: block; }
+    .preview-pin path { fill: currentColor; }
+    .preview-pin.active { color: rgba(0,0,0,0.72); background: rgba(0,0,0,0.12); }
+    .preview-section-pin svg { width: 11px; height: 11px; display: block; }
+    .preview-section-pin path { fill: currentColor; color: rgba(0,0,0,0.62); }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="memo-sidebar">
+      <div class="memo-list">
+        <button class="memo-tab active sync-tab sync-g1" style="--tab-hue: 54"></button>
+        <button class="memo-tab sync-tab sync-g2" style="--tab-hue: 200"></button>
+      </div>
+      <button class="btn-new-memo">+</button>
+    </aside>
+    <div class="postit" style="--hue: 54">
+      <header class="titlebar">
+        <div class="titlebar-drag"></div>
+        <div class="titlebar-buttons">
+          <button class="btn-icon preview-pin active" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M16 12V4h1V2H7v2h1v8l-2 2v1h5.2V22h1.6v-7H18v-1l-2-2z"/></svg>
+          </button>
+          <button class="btn-icon">⚙</button>
+          <button class="btn-icon">−</button>
+          <button class="btn-icon">×</button>
+        </div>
+      </header>
+      <main class="content">
+        <div class="scroll-area">
+          <div class="view-panel">
+            <section class="section section-today">
+              <div class="section-header">
+                <h2>오늘 할일</h2>
+                <span class="date">2026년 7월 28일 (월)</span>
+              </div>
+              <ul class="todo-list">
+                <li class="todo-item"><span class="drag-handle">⠿</span><input type="checkbox"><button class="btn-indent" disabled>›</button><div class="todo-text wrap">팀 미팅 14:00 [캘린더]</div></li>
+                <li class="todo-item"><span class="drag-handle">⠿</span><input type="checkbox"><button class="btn-indent" disabled>›</button><div class="todo-text wrap">[보고] 주간 정리 (15:30)</div></li>
+                <li class="todo-item"><span class="drag-handle">⠿</span><input type="checkbox" checked><button class="btn-indent" disabled>›</button><div class="todo-text wrap">이메일 확인</div></li>
+              </ul>
+              <div class="today-actions">
+                <button class="btn-add">+ 추가</button>
+                <button class="btn-add btn-calendar-add">캘린더 일정 추가</button>
+              </div>
+            </section>
+            <div class="divider"></div>
+            <section class="section section-custom">
+              <div class="section-header">
+                <h2 class="section-title">할일</h2>
+                <div class="section-header-actions">
+                  <button class="btn-section-pin pinned preview-section-pin" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M16 12V4h1V2H7v2h1v8l-2 2v1h5.2V22h1.6v-7H18v-1l-2-2z"/></svg>
+                  </button>
+                </div>
+              </div>
+              <ul class="todo-list">
+                <li class="todo-item"><span class="drag-handle">⠿</span><input type="checkbox"><button class="btn-indent" disabled>›</button><div class="todo-text wrap">블로그 초안 (7월 27일)</div></li>
+              </ul>
+              <button class="btn-add">+ 추가</button>
+            </section>
+            <div class="divider"></div>
+            <section class="section section-custom">
+              <div class="section-header">
+                <h2 class="section-title">개인 메모</h2>
+                <div class="section-header-actions">
+                  <button class="btn-section-pin preview-section-pin" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M16 12V4h1V2H7v2h1v8l-2 2v1h5.2V22h1.6v-7H18v-1l-2-2z"/></svg>
+                  </button>
+                  <button class="btn-section-delete">×</button>
+                </div>
+              </div>
+              <ul class="todo-list">
+                <li class="todo-item"><span class="drag-handle">⠿</span><input type="checkbox"><button class="btn-indent" disabled>›</button><div class="todo-text wrap">운동 30분</div></li>
+              </ul>
+              <button class="btn-add">+ 추가</button>
+            </section>
+            <button class="btn-add btn-add-section">+ 섹션 추가</button>
+          </div>
+        </div>
+      </main>
+      <footer class="footer">
+        <button class="btn-summary">오늘 한일 정리하기</button>
+      </footer>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=380">
+  <title>Memos Alarm Preview</title>
+  <link rel="stylesheet" href="../css/styles.css">
+  <style>
+    html, body { width: 380px; height: 520px; overflow: hidden; background: #e8e4dc; }
+    .app-shell { width: 380px; height: 520px; }
+    .postit { height: 520px; border-radius: 8px; --hue: 200; background: linear-gradient(145deg, hsl(200, 80%, 88%) 0%, hsl(200, 85%, 78%) 50%, hsl(200, 80%, 72%) 100%); }
+    .memo-tab.alarm-tab svg { width: 12px; height: 12px; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="memo-sidebar">
+      <div class="memo-list">
+        <button class="memo-tab sync-tab sync-g1" style="--tab-hue: 54"></button>
+        <button class="memo-tab alarm-tab active sync-tab sync-g2">
+          <svg viewBox="0 0 24 24"><path fill="hsl(200, 72%, 52%)" d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.9 2.49.4 4 2.42 4 4.9v6z"/></svg>
+        </button>
+      </div>
+      <button class="btn-new-memo">+</button>
+    </aside>
+    <div class="postit">
+      <header class="titlebar">
+        <div class="titlebar-drag"></div>
+        <div class="titlebar-buttons">
+          <button class="btn-icon">⚙</button>
+          <button class="btn-icon">−</button>
+          <button class="btn-icon">×</button>
+        </div>
+      </header>
+      <main class="content">
+        <div class="scroll-area">
+          <div class="view-panel">
+            <section class="section section-once">
+              <div class="section-header"><h2>1회성 알람</h2></div>
+              <ul class="alarm-list">
+                <li class="alarm-item">
+                  <div class="alarm-item-main">
+                    <div class="alarm-item-title">병원 예약</div>
+                    <div class="alarm-item-meta">7/29 (화) 09:00</div>
+                  </div>
+                </li>
+              </ul>
+              <button class="btn-add">+ 알람 추가</button>
+            </section>
+            <div class="divider"></div>
+            <section class="section section-recurring">
+              <div class="section-header"><h2>주기적 알람</h2></div>
+              <ul class="alarm-list">
+                <li class="alarm-item">
+                  <div class="alarm-item-main">
+                    <div class="alarm-item-title">물 마시기</div>
+                    <div class="alarm-item-meta">월·수·금 10:00</div>
+                  </div>
+                </li>
+              </ul>
+              <button class="btn-add">+ 알람 추가</button>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

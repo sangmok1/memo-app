@@ -17,6 +17,7 @@
     "build:release": "bash scripts/build-release.sh",
     "build:release:signed": "bash scripts/build-release-signed.sh",
     "build:release:signed-no-notarize": "bash scripts/build-release-signed-no-notarize.sh",
+    "capture:screenshots": "electron scripts/capture-landing-screenshots.js",
     "launch": "bash scripts/launch.sh",
     "install-app": "bash scripts/install-app.sh"
   },
