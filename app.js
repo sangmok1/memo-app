@@ -266,8 +266,48 @@ function normalizeItemDepth(item) {
 
 function formatSummaryLine(text, depth = 0) {
   const label = text.trim();
-  if (depth === 1) return `  ◦ ${label}`;
-  return `• ${label}`;
+  // 슬랙에 붙여넣을 때 네이티브 불릿으로 변환되도록 마크다운 '-' 사용.
+  // (메인닷 '- ', 서브닷은 4칸 들여쓰기 '-') 리치 붙여넣기는 아래 HTML 클립보드가 담당.
+  if (depth === 1) return `    - ${label}`;
+  return `- ${label}`;
+}
+
+function escapeSummaryHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// 평면 [{text, depth}] 목록을 중첩 <ul><li>로. depth=1은 직전 depth=0 항목의 자식.
+function summaryItemsToHtml(items) {
+  let inner = '';
+  let i = 0;
+  while (i < items.length) {
+    const it = items[i];
+    const label = escapeSummaryHtml((it.text || '').trim());
+    if ((it.depth || 0) === 1) {
+      inner += `<li>${label}</li>`; // 부모 없는 서브닷 방어
+      i += 1;
+      continue;
+    }
+    const kids = [];
+    let j = i + 1;
+    while (j < items.length && (items[j].depth || 0) === 1) {
+      kids.push(items[j]);
+      j += 1;
+    }
+    if (kids.length) {
+      const sub = kids
+        .map((k) => `<li>${escapeSummaryHtml((k.text || '').trim())}</li>`)
+        .join('');
+      inner += `<li>${label}<ul>${sub}</ul></li>`;
+    } else {
+      inner += `<li>${label}</li>`;
+    }
+    i = j;
+  }
+  return `<ul>${inner}</ul>`;
 }
 
 function hasParentAbove(items, index) {
@@ -1515,13 +1555,18 @@ function checkAllAlarms() {
   }
 }
 
-function buildSummary() {
-  const date = formatKSTDate(getKSTDate());
+function collectCompletedItems() {
   ensureMemoSections(currentMemo);
   const completedToday = currentMemo.today.filter((t) => t.done && t.text.trim());
   const completedSections = currentMemo.sections.flatMap((section) =>
     section.items.filter((t) => t.done && t.text.trim()),
   );
+  return { completedToday, completedSections };
+}
+
+function buildSummary() {
+  const date = formatKSTDate(getKSTDate());
+  const { completedToday, completedSections } = collectCompletedItems();
 
   if (completedToday.length === 0 && completedSections.length === 0) {
     return `${date}\n\n완료한 일이 없습니다.`;
@@ -1534,6 +1579,17 @@ function buildSummary() {
   completedSections.forEach((t) => lines.push(formatSummaryLine(t.text, t.depth || 0)));
 
   return lines.join('\n');
+}
+
+// 슬랙 리치 붙여넣기용 HTML. 완료 항목이 없으면 '' (이때는 plain text만 복사).
+function buildSummaryHtml() {
+  const { completedToday, completedSections } = collectCompletedItems();
+  const all = [...completedToday, ...completedSections].map((t) => ({
+    text: t.text,
+    depth: t.depth || 0,
+  }));
+  if (all.length === 0) return '';
+  return summaryItemsToHtml(all);
 }
 
 document.querySelectorAll('.btn-add[data-list]').forEach((btn) => {
@@ -1565,9 +1621,11 @@ document.querySelectorAll('#alarm-day-picker .day-btn').forEach((btn) => {
 
 const summaryModal = document.getElementById('summary-modal');
 const summaryText = document.getElementById('summary-text');
+let summaryHtmlCache = ''; // 모달 열 때 만든 슬랙용 HTML (복사 시 사용)
 
 document.getElementById('btn-summary').addEventListener('click', async () => {
   summaryText.value = buildSummary();
+  summaryHtmlCache = buildSummaryHtml();
   const completedToday = currentMemo.today.filter((t) => t.done && t.text.trim());
   if (completedToday.length > 0) {
     await archiveItems(currentMemo.id, getTodayKey(), completedToday);
@@ -1584,15 +1642,37 @@ summaryModal.querySelector('.modal-backdrop').addEventListener('click', () => {
 });
 
 document.getElementById('btn-copy').addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(summaryText.value);
+  const plain = summaryText.value;
+  const html = summaryHtmlCache;
+  const flashCopied = () => {
     const btn = document.getElementById('btn-copy');
     const orig = btn.textContent;
     btn.textContent = '복사됨!';
     setTimeout(() => { btn.textContent = orig; }, 1500);
+  };
+  try {
+    // 리치(HTML) + 평문 동시 복사 → 슬랙은 HTML을 읽어 네이티브 불릿(메인/서브닷)으로 렌더.
+    if (html && window.ClipboardItem && navigator.clipboard?.write) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([plain], { type: 'text/plain' }),
+        }),
+      ]);
+    } else {
+      await navigator.clipboard.writeText(plain);
+    }
+    flashCopied();
   } catch {
-    summaryText.select();
-    document.execCommand('copy');
+    // 무슨 일이 있어도 복사 자체는 되게 (평문 폴백)
+    try {
+      await navigator.clipboard.writeText(plain);
+      flashCopied();
+    } catch {
+      summaryText.select();
+      document.execCommand('copy');
+      flashCopied();
+    }
   }
 });
 
