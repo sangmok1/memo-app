@@ -129,7 +129,26 @@ function mergeArchiveTrees(local, remote) {
   return merged;
 }
 
+// 동기화 시 "완료된(done) 항목"은 원격에서 가져오지 않기 위해 제거.
+// today / 각 section.items 에서 done=true 항목을 걸러낸 새 state 를 반환한다.
+function stripCompletedItems(state) {
+  if (!state || !state.memos) return state;
+  const filterDone = (arr) => (Array.isArray(arr) ? arr.filter((it) => !it || !it.done) : arr);
+  const memos = {};
+  Object.entries(state.memos).forEach(([id, memo]) => {
+    if (!memo) { memos[id] = memo; return; }
+    const next = { ...memo };
+    if (Array.isArray(next.today)) next.today = filterDone(next.today);
+    if (Array.isArray(next.sections)) {
+      next.sections = next.sections.map((s) => (s ? { ...s, items: filterDone(s.items) } : s));
+    }
+    memos[id] = next;
+  });
+  return { ...state, memos };
+}
+
 module.exports = {
   mergeAppStates,
   mergeArchiveTrees,
+  stripCompletedItems,
 };

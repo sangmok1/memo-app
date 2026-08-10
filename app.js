@@ -644,6 +644,50 @@ function placeCaretAtStart(el) {
   sel?.addRange(range);
 }
 
+function placeCaretAtEnd(el) {
+  if (el.tagName === 'INPUT') {
+    const len = el.value.length;
+    el.setSelectionRange(len, len);
+    return;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+}
+
+function getTodoCaretInfo(el) {
+  if (el.tagName === 'INPUT') {
+    return {
+      atStart: el.selectionStart === 0 && el.selectionEnd === 0,
+      atEnd: el.selectionStart === el.value.length && el.selectionEnd === el.value.length,
+    };
+  }
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return { atStart: true, atEnd: true };
+  const r = sel.getRangeAt(0);
+  const pre = r.cloneRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(r.endContainer, r.endOffset);
+  const pos = pre.toString().length;
+  const total = getTodoText(el).length;
+  return { atStart: r.collapsed && pos === 0, atEnd: r.collapsed && pos >= total };
+}
+
+// 위/아래 방향키로 모든 섹션(오늘 + 각 섹션)을 넘나들며 칸(할일 입력) 이동
+function focusAdjacentTodoField(currentEl, dir) {
+  const fields = Array.from(document.querySelectorAll('.todo-text'));
+  const i = fields.indexOf(currentEl);
+  if (i === -1) return false;
+  const target = fields[i + dir];
+  if (!target) return false;
+  target.focus();
+  placeCaretAtEnd(target);
+  return true;
+}
+
 function bindTodoTextEvents(input, items, index, listType) {
   const onChange = () => {
     items[index].text = getTodoText(input);
@@ -675,6 +719,20 @@ function bindTodoTextEvents(input, items, index, listType) {
       items[index].text = getTodoText(input);
       insertItemAfter(listType, index, items[index].depth || 0);
       return;
+    }
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      const dir = e.key === 'ArrowDown' ? 1 : -1;
+      let jump;
+      if (input.tagName === 'INPUT') {
+        jump = true; // 단일 라인: 위/아래는 곧 칸 이동
+      } else {
+        const ci = getTodoCaretInfo(input);
+        jump = dir === -1 ? ci.atStart : ci.atEnd; // 여러 줄(wrap): 맨 위/아래 줄에서만 칸 이동
+      }
+      if (jump && focusAdjacentTodoField(input, dir)) {
+        e.preventDefault();
+        return;
+      }
     }
     const empty = input.tagName === 'INPUT' ? !input.value : !getTodoText(input);
     if (e.key === 'Backspace' && empty && items.length > 1) {

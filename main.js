@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell, nativeImage, screen, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { mergeAppStates, mergeArchiveTrees } = require('./sync-merge');
+const { mergeAppStates, mergeArchiveTrees, stripCompletedItems } = require('./sync-merge');
 const { normalizeSyncConfig } = require('./sync-groups');
 const {
   getClientId,
@@ -616,8 +616,10 @@ async function syncWithGoogle(appState, options = {}) {
     remoteBundle = await fetchRemoteBundleAuth(idToken);
   }
 
-  const mergedState = remoteBundle
-    ? mergeAppStates(appState, remoteBundle.appState)
+  // 완료된 항목은 원격에서 가져오지 않음 (동기화로 완료 항목이 되살아나는 것 방지)
+  const remoteState = remoteBundle ? stripCompletedItems(remoteBundle.appState) : null;
+  const mergedState = remoteState
+    ? mergeAppStates(appState, remoteState)
     : appState;
   const mergedArchives = remoteBundle
     ? mergeArchiveTrees(localArchives, remoteBundle.archives)
