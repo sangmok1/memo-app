@@ -48,7 +48,10 @@ function mergeAppStates(local, remote) {
     let winner = null;
 
     if (left && right) {
-      winner = ts(right.updatedAt || right.createdAt) >= ts(left.updatedAt || left.createdAt)
+      // 타임스탬프가 같으면(= 같은 상태를 서로 push/pull 한 경우) 로컬을 우선한다.
+      // 원격은 stripCompletedItems 로 완료항목이 제거된 채 같은 updatedAt 을 가지므로,
+      // >= 로 두면 동점에서 원격이 이겨 당일 완료 체크가 매 동기화마다 사라진다.
+      winner = ts(right.updatedAt || right.createdAt) > ts(left.updatedAt || left.createdAt)
         ? right
         : left;
     } else if (left) {

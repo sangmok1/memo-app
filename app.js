@@ -703,6 +703,7 @@ function bindTodoTextEvents(input, items, index, listType) {
       placeCaretAtStart(input);
     });
     input.addEventListener('focus', () => {
+      if (input.querySelector('mark.find-term')) clearTermMarks();
       if (!getTodoText(input)) placeCaretAtStart(input);
     });
   }
@@ -2395,10 +2396,43 @@ const findInputEl = document.getElementById('find-input');
 const findCountEl = document.getElementById('find-count');
 const findState = { open: false, matches: [], index: -1 };
 
+function clearTermMarks() {
+  document.querySelectorAll('mark.find-term').forEach((mark) => {
+    const parent = mark.parentNode;
+    if (!parent) return;
+    while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+    parent.removeChild(mark);
+    parent.normalize();
+  });
+}
+
 function clearFindHighlights() {
   document.querySelectorAll('.find-match, .find-current').forEach((el) => {
     el.classList.remove('find-match', 'find-current');
   });
+  clearTermMarks();
+}
+
+// 매칭된 항목 안에서 '검색어 자체'를 <mark> 로 감싼다 (여러 줄 wrap 메모에서 단어 위치로 이동시키기 위함).
+// 단일 라인 input 은 마크업을 넣을 수 없어 null 을 반환하고, 이 경우 칸 전체로 스크롤한다.
+function highlightTermInField(field, query) {
+  const q = query.trim();
+  if (!q || !field || field.tagName === 'INPUT') return null;
+  const lower = q.toLowerCase();
+  const walker = document.createTreeWalker(field, NodeFilter.SHOW_TEXT, null);
+  let node;
+  while ((node = walker.nextNode())) {
+    const idx = node.nodeValue.toLowerCase().indexOf(lower);
+    if (idx === -1) continue;
+    const range = document.createRange();
+    range.setStart(node, idx);
+    range.setEnd(node, idx + q.length);
+    const mark = document.createElement('mark');
+    mark.className = 'find-term';
+    range.surroundContents(mark);
+    return mark;
+  }
+  return null;
 }
 
 function updateFindCount() {
@@ -2417,10 +2451,13 @@ function highlightFindMatch(index) {
     updateFindCount();
     return;
   }
+  clearTermMarks();
   findState.index = ((index % findState.matches.length) + findState.matches.length) % findState.matches.length;
   const current = findState.matches[findState.index];
   current.classList.add('find-current');
-  current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  const field = current.querySelector('.todo-text') || current.querySelector('.alarm-item-title');
+  const mark = field ? highlightTermInField(field, findInputEl?.value || '') : null;
+  (mark || current).scrollIntoView({ block: 'center', behavior: 'smooth' });
   updateFindCount();
 }
 
