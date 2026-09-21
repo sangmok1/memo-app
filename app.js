@@ -182,6 +182,7 @@ function migrateData(raw) {
     if (!raw.deletedMemos) raw.deletedMemos = {};
     if (!raw.deletedMemoGroups) raw.deletedMemoGroups = {};
     if (!raw.trashedMemos) raw.trashedMemos = {};
+    if (!Array.isArray(raw.trashedItems)) raw.trashedItems = [];
     Object.values(raw.memos).forEach((item) => {
       if (!item.type) item.type = 'memo';
       if (!item.updatedAt) item.updatedAt = item.createdAt || now;
@@ -233,6 +234,7 @@ function loadAppState() {
     memos: { [id]: createEmptyMemo(id) },
     deletedMemos: {},
     trashedMemos: {},
+    trashedItems: [],
   };
 }
 
@@ -859,6 +861,8 @@ function renderList(listEl, items, listType) {
     deleteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const wasParent = (items[index].depth || 0) === 0;
+      // 삭제 항목을 휴지통(로컬)으로 — 3일간 복원 가능
+      trashTodoItem(listType, index, items[index]);
       items.splice(index, 1);
       if (wasParent) {
         for (let i = index; i < items.length; i++) {
@@ -868,6 +872,7 @@ function renderList(listEl, items, listType) {
       }
       saveData();
       renderAllLists();
+      updateTrashBadge();
     });
 
     li.append(handle, checkbox, indentBtn, input, deleteBtn);
@@ -1457,6 +1462,14 @@ function purgeExpiredTrash() {
       changed = true;
     }
   });
+  // 아이템 단위 휴지통도 3일 초과분 제거
+  if (Array.isArray(appState.trashedItems) && appState.trashedItems.length) {
+    const before = appState.trashedItems.length;
+    appState.trashedItems = appState.trashedItems.filter(
+      (t) => (now - new Date(t.trashedAt || 0).getTime()) < TRASH_RETENTION_MS
+    );
+    if (appState.trashedItems.length !== before) changed = true;
+  }
   if (changed) {
     appState.updatedAt = new Date().toISOString();
     saveAppState();
@@ -1467,6 +1480,58 @@ function purgeExpiredTrash() {
 function trashDaysLeft(trashedAt) {
   const left = TRASH_RETENTION_MS - (Date.now() - new Date(trashedAt || 0).getTime());
   return Math.max(0, Math.ceil(left / (24 * 60 * 60 * 1000)));
+}
+
+// ===== 아이템(할일) 단위 휴지통 =====
+function trashTodoItem(listType, index, item) {
+  if (!item) return;
+  if (!Array.isArray(appState.trashedItems)) appState.trashedItems = [];
+  const memo = currentMemo;
+  const section = listType === 'today' ? null : getSectionById(memo, listType);
+  appState.trashedItems.push({
+    id: `ti-${createId()}`,
+    memoId: memo?.id,
+    listType,
+    sectionTitle: section ? section.title : (listType === 'today' ? '오늘' : ''),
+    index,
+    item: { text: item.text || '', done: !!item.done, depth: item.depth || 0 },
+    trashedAt: new Date().toISOString(),
+  });
+}
+
+function restoreTrashedItem(trashId) {
+  const arr = appState.trashedItems || [];
+  const pos = arr.findIndex((t) => t.id === trashId);
+  if (pos < 0) return;
+  const entry = arr[pos];
+  const memo = appState.memos[entry.memoId];
+  if (!memo) { arr.splice(pos, 1); saveAppState(); renderTrashList(); updateTrashBadge(); return; }
+  // 대상 리스트 배열 찾기 (현재 활성 메모든 아니든)
+  let list;
+  if (entry.listType === 'today') list = memo.today || (memo.today = []);
+  else {
+    const sec = getSectionById(memo, entry.listType);
+    list = sec ? (sec.items || (sec.items = [])) : (memo.today || (memo.today = []));
+  }
+  const at = Math.min(Math.max(entry.index ?? list.length, 0), list.length);
+  list.splice(at, 0, { id: createId(), text: entry.item.text, done: entry.item.done, depth: entry.item.depth });
+  arr.splice(pos, 1);
+  touchAppState(entry.memoId);
+  saveAppState();
+  renderTrashList();
+  updateTrashBadge();
+  if (entry.memoId === appState.activeMemoId) renderAllLists();
+  scheduleCloudSync(true);
+}
+
+function purgeTrashedItemById(trashId) {
+  const arr = appState.trashedItems || [];
+  const pos = arr.findIndex((t) => t.id === trashId);
+  if (pos < 0) return;
+  arr.splice(pos, 1);
+  saveAppState();
+  renderTrashList();
+  updateTrashBadge();
 }
 
 function switchMemo(memoId) {
@@ -1912,7 +1977,8 @@ function memoPreviewLabel(memo) {
 function updateTrashBadge() {
   const badge = document.getElementById('trash-count-badge');
   if (!badge) return;
-  const n = Object.keys(appState.trashedMemos || {}).length;
+  const n = Object.keys(appState.trashedMemos || {}).length
+    + (appState.trashedItems || []).length;
   if (n > 0) { badge.textContent = ` ${n}`; badge.classList.remove('hidden'); }
   else { badge.classList.add('hidden'); }
 }
@@ -1924,7 +1990,10 @@ function renderTrashList() {
   listEl.innerHTML = '';
   const entries = Object.entries(appState.trashedMemos || {})
     .sort((a, b) => new Date(b[1].trashedAt || 0) - new Date(a[1].trashedAt || 0));
-  if (!entries.length) {
+  const items = (appState.trashedItems || [])
+    .slice()
+    .sort((a, b) => new Date(b.trashedAt || 0) - new Date(a.trashedAt || 0));
+  if (!entries.length && !items.length) {
     emptyEl?.classList.remove('hidden');
   } else {
     emptyEl?.classList.add('hidden');
@@ -1952,6 +2021,37 @@ function renderTrashList() {
     purgeBtn.className = 'btn-archive-link trash-purge-btn';
     purgeBtn.textContent = '영구삭제';
     purgeBtn.addEventListener('click', () => { purgeTrashItem(id); updateTrashBadge(); });
+    actions.appendChild(restoreBtn); actions.appendChild(purgeBtn);
+    li.appendChild(info); li.appendChild(actions);
+    listEl.appendChild(li);
+  });
+
+  // 삭제된 개별 항목
+  items.forEach((entry) => {
+    const li = document.createElement('li');
+    li.className = 'trash-item';
+    const info = document.createElement('div');
+    info.className = 'trash-item-info';
+    const label = document.createElement('div');
+    label.className = 'trash-item-label';
+    label.textContent = entry.item?.text?.trim() || '(빈 항목)';
+    const meta = document.createElement('div');
+    meta.className = 'trash-item-meta';
+    const days = trashDaysLeft(entry.trashedAt);
+    const memo = appState.memos[entry.memoId] || appState.trashedMemos?.[entry.memoId]?.memo;
+    const where = entry.sectionTitle ? `항목 · ${entry.sectionTitle}` : '항목';
+    meta.textContent = `${where} · ${days === 0 ? '곧 삭제됨' : `${days}일 후 삭제`}`;
+    info.appendChild(label); info.appendChild(meta);
+    const actions = document.createElement('div');
+    actions.className = 'trash-item-actions';
+    const restoreBtn = document.createElement('button');
+    restoreBtn.className = 'btn-archive-link';
+    restoreBtn.textContent = '복원';
+    restoreBtn.addEventListener('click', () => restoreTrashedItem(entry.id));
+    const purgeBtn = document.createElement('button');
+    purgeBtn.className = 'btn-archive-link trash-purge-btn';
+    purgeBtn.textContent = '영구삭제';
+    purgeBtn.addEventListener('click', () => purgeTrashedItemById(entry.id));
     actions.appendChild(restoreBtn); actions.appendChild(purgeBtn);
     li.appendChild(info); li.appendChild(actions);
     listEl.appendChild(li);
@@ -2322,8 +2422,10 @@ async function applySyncResult(result) {
   if (result?.appState) {
     // 휴지통은 로컬 전용 — merge 결과엔 없으므로 병합 전 로컬 값을 보존한다.
     const localTrash = appState.trashedMemos || {};
+    const localTrashItems = appState.trashedItems || [];
     appState = migrateData(result.appState);
     appState.trashedMemos = localTrash;
+    appState.trashedItems = localTrashItems;
     // 부활 가드: 로컬 휴지통에 있는 메모가 원격에서 다시 활성으로 딸려오면 제거
     Object.keys(localTrash).forEach((id) => {
       if (appState.memos[id]) {
