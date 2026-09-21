@@ -85,7 +85,7 @@ async function readUserBundle(bucket, sub) {
   return JSON.parse(buf.toString('utf8'));
 }
 
-async function saveUserBundle(bucket, sub, bundle) {
+async function saveUserBundle(bucket, sub, bundle, identity = {}) {
   const payload = JSON.stringify(bundle);
   if (Buffer.byteLength(payload, 'utf8') > MAX_BYTES) {
     const err = new Error('too_large');
@@ -94,7 +94,15 @@ async function saveUserBundle(bucket, sub, bundle) {
   }
   await bucket.file(userObjectPath(sub)).save(payload, {
     contentType: 'application/json; charset=utf-8',
-    metadata: { cacheControl: 'no-store' },
+    // cacheControl 은 표준 필드, 나머지는 커스텀 메타데이터(계정 식별용)
+    metadata: {
+      cacheControl: 'no-store',
+      metadata: {
+        email: identity.email || '',
+        name: identity.name || '',
+        lastSyncAt: new Date().toISOString(),
+      },
+    },
   });
   return payload.length;
 }
@@ -146,7 +154,10 @@ functions.http('syncApi', async (req, res) => {
           }
         }
 
-        const size = await saveUserBundle(bucket, payload.sub, bundle);
+        const size = await saveUserBundle(bucket, payload.sub, bundle, {
+          email: payload.email,
+          name: payload.name,
+        });
         return res.json({
           userId: payload.sub,
           email: payload.email || '',
