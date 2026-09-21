@@ -26,7 +26,7 @@
   <section class="hero">
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <p class="eyebrow">v1.3.0 · macOS · Windows</p>
+        <p class="eyebrow"><span id="latest-version">v1.3.0</span> · macOS · Windows</p>
         <h1>바탕화면에 붙여두는<br>할일 메모</h1>
         <p class="lead">
           포스트잇처럼 가볍게 켜두고, 오늘 할일 · 섹션 · 알람을 한곳에서.
@@ -193,7 +193,7 @@
           <li><code>Memos.app</code> → Applications로 이동</li>
           <li>안 열리면: <code>xattr -cr /Applications/Memos.app && open /Applications/Memos.app</code></li>
         </ol>
-        <p>v1.3.0부터 Apple 공증(Notarized) 빌드가 Releases에 포함됩니다.</p>
+        <p>v1.3.0부터 Apple 공증(Notarized) 빌드가 Releases에 포함됩니다. (현재 최신: <span id="latest-version-2">—</span>)</p>
       </details>
     </div>
   </section>
@@ -204,5 +204,21 @@
       <p><a href="https://github.com/sangmok1/memo-app/releases/latest">최신 릴리스</a> · <a href="../README.md">README</a></p>
     </div>
   </footer>
+  <script>
+    // 최신 릴리스 버전을 GitHub API에서 가져와 자동 표시 (새 릴리스 올리면 사이트가 알아서 갱신)
+    (function () {
+      fetch('https://api.github.com/repos/sangmok1/memo-app/releases/latest')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.tag_name) return;
+          var v = d.tag_name; // 예: v1.5.1
+          var el1 = document.getElementById('latest-version');
+          var el2 = document.getElementById('latest-version-2');
+          if (el1) el1.textContent = v;
+          if (el2) el2.textContent = v;
+        })
+        .catch(function () {});
+    })();
+  </script>
 </body>
 </html>
