@@ -181,6 +181,7 @@ function migrateData(raw) {
     if (!raw.updatedAt) raw.updatedAt = now;
     if (!raw.deletedMemos) raw.deletedMemos = {};
     if (!raw.deletedMemoGroups) raw.deletedMemoGroups = {};
+    if (!raw.trashedMemos) raw.trashedMemos = {};
     Object.values(raw.memos).forEach((item) => {
       if (!item.type) item.type = 'memo';
       if (!item.updatedAt) item.updatedAt = item.createdAt || now;
@@ -231,8 +232,12 @@ function loadAppState() {
     memoOrder: [id],
     memos: { [id]: createEmptyMemo(id) },
     deletedMemos: {},
+    trashedMemos: {},
   };
 }
+
+// 휴지통 보관 기간 (3일)
+const TRASH_RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
 
 function touchAppState(memoId = appState.activeMemoId) {
   const now = new Date().toISOString();
@@ -1379,12 +1384,17 @@ function closeDeleteModal() {
 function deleteMemo(memoId) {
   if (appState.memoOrder.length <= 1 || !appState.memos[memoId]) return;
 
-  if (!appState.deletedMemos) appState.deletedMemos = {};
-  if (!appState.deletedMemoGroups) appState.deletedMemoGroups = {};
-  appState.deletedMemos[memoId] = new Date().toISOString();
-  appState.deletedMemoGroups[memoId] = appState.memos[memoId].syncGroupId || getDefaultSyncGroupId();
-
+  // 소프트 삭제: 즉시 tombstone(동기화 전파) 대신 휴지통(로컬)으로 이동.
+  // 3일간 복원 가능, 3일 후 자동 비우기에서 진짜 tombstone 생성 → 그때 동기화로 삭제 전파.
+  if (!appState.trashedMemos) appState.trashedMemos = {};
   const orderIndex = appState.memoOrder.indexOf(memoId);
+  appState.trashedMemos[memoId] = {
+    memo: appState.memos[memoId],
+    trashedAt: new Date().toISOString(),
+    origIndex: orderIndex,
+    groupId: appState.memos[memoId].syncGroupId || getDefaultSyncGroupId(),
+  };
+
   delete appState.memos[memoId];
   appState.memoOrder = appState.memoOrder.filter((id) => id !== memoId);
 
@@ -1397,6 +1407,66 @@ function deleteMemo(memoId) {
   saveAppState();
   closeDeleteModal();
   refreshActiveUI();
+  updateTrashBadge();
+}
+
+// 휴지통에서 복원
+function restoreFromTrash(memoId) {
+  const entry = appState.trashedMemos?.[memoId];
+  if (!entry) return;
+  appState.memos[memoId] = entry.memo;
+  // 원래 위치 근처로 복원
+  const idx = Math.min(Math.max(entry.origIndex ?? appState.memoOrder.length, 0), appState.memoOrder.length);
+  if (!appState.memoOrder.includes(memoId)) appState.memoOrder.splice(idx, 0, memoId);
+  delete appState.trashedMemos[memoId];
+  touchAppState(memoId);
+  saveAppState();
+  renderTrashList();
+  refreshActiveUI();
+  scheduleCloudSync(true);
+}
+
+// 휴지통에서 영구 삭제 (진짜 tombstone 생성 → 동기화로 전파)
+function purgeTrashItem(memoId) {
+  const entry = appState.trashedMemos?.[memoId];
+  if (!entry) return;
+  if (!appState.deletedMemos) appState.deletedMemos = {};
+  if (!appState.deletedMemoGroups) appState.deletedMemoGroups = {};
+  appState.deletedMemos[memoId] = new Date().toISOString();
+  appState.deletedMemoGroups[memoId] = entry.groupId || getDefaultSyncGroupId();
+  delete appState.trashedMemos[memoId];
+  appState.updatedAt = new Date().toISOString();
+  saveAppState();
+  renderTrashList();
+  scheduleCloudSync(true);
+}
+
+// 3일 초과 항목 자동 비우기 (앱 시작 시 호출)
+function purgeExpiredTrash() {
+  if (!appState.trashedMemos) return false;
+  const now = Date.now();
+  let changed = false;
+  Object.entries(appState.trashedMemos).forEach(([id, entry]) => {
+    const age = now - new Date(entry.trashedAt || 0).getTime();
+    if (age >= TRASH_RETENTION_MS) {
+      if (!appState.deletedMemos) appState.deletedMemos = {};
+      if (!appState.deletedMemoGroups) appState.deletedMemoGroups = {};
+      appState.deletedMemos[id] = new Date().toISOString();
+      appState.deletedMemoGroups[id] = entry.groupId || getDefaultSyncGroupId();
+      delete appState.trashedMemos[id];
+      changed = true;
+    }
+  });
+  if (changed) {
+    appState.updatedAt = new Date().toISOString();
+    saveAppState();
+  }
+  return changed;
+}
+
+function trashDaysLeft(trashedAt) {
+  const left = TRASH_RETENTION_MS - (Date.now() - new Date(trashedAt || 0).getTime());
+  return Math.max(0, Math.ceil(left / (24 * 60 * 60 * 1000)));
 }
 
 function switchMemo(memoId) {
@@ -1824,6 +1894,82 @@ document.getElementById('btn-confirm-delete').addEventListener('click', () => {
 document.getElementById('btn-cancel-delete').addEventListener('click', closeDeleteModal);
 deleteModal.querySelector('.modal-backdrop').addEventListener('click', closeDeleteModal);
 
+// ===== 휴지통(Trash) UI =====
+const trashModal = document.getElementById('trash-modal');
+
+function memoPreviewLabel(memo) {
+  if (!memo) return '(빈 메모)';
+  if (isAlarmBoard(memo)) return '알람';
+  const texts = [];
+  (memo.today || []).forEach((it) => { if (it?.text?.trim()) texts.push(it.text.trim()); });
+  (memo.sections || []).forEach((sec) => {
+    (sec.items || []).forEach((it) => { if (it?.text?.trim()) texts.push(it.text.trim()); });
+  });
+  const preview = texts.slice(0, 3).join(' · ');
+  return preview || '(빈 메모)';
+}
+
+function updateTrashBadge() {
+  const badge = document.getElementById('trash-count-badge');
+  if (!badge) return;
+  const n = Object.keys(appState.trashedMemos || {}).length;
+  if (n > 0) { badge.textContent = ` ${n}`; badge.classList.remove('hidden'); }
+  else { badge.classList.add('hidden'); }
+}
+
+function renderTrashList() {
+  const listEl = document.getElementById('trash-list');
+  const emptyEl = document.getElementById('trash-empty');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  const entries = Object.entries(appState.trashedMemos || {})
+    .sort((a, b) => new Date(b[1].trashedAt || 0) - new Date(a[1].trashedAt || 0));
+  if (!entries.length) {
+    emptyEl?.classList.remove('hidden');
+  } else {
+    emptyEl?.classList.add('hidden');
+  }
+  entries.forEach(([id, entry]) => {
+    const li = document.createElement('li');
+    li.className = 'trash-item';
+    const info = document.createElement('div');
+    info.className = 'trash-item-info';
+    const label = document.createElement('div');
+    label.className = 'trash-item-label';
+    label.textContent = memoPreviewLabel(entry.memo);
+    const meta = document.createElement('div');
+    meta.className = 'trash-item-meta';
+    const days = trashDaysLeft(entry.trashedAt);
+    meta.textContent = `${isAlarmBoard(entry.memo) ? '알람' : '메모'} · ${days === 0 ? '곧 삭제됨' : `${days}일 후 삭제`}`;
+    info.appendChild(label); info.appendChild(meta);
+    const actions = document.createElement('div');
+    actions.className = 'trash-item-actions';
+    const restoreBtn = document.createElement('button');
+    restoreBtn.className = 'btn-archive-link';
+    restoreBtn.textContent = '복원';
+    restoreBtn.addEventListener('click', () => { restoreFromTrash(id); updateTrashBadge(); });
+    const purgeBtn = document.createElement('button');
+    purgeBtn.className = 'btn-archive-link trash-purge-btn';
+    purgeBtn.textContent = '영구삭제';
+    purgeBtn.addEventListener('click', () => { purgeTrashItem(id); updateTrashBadge(); });
+    actions.appendChild(restoreBtn); actions.appendChild(purgeBtn);
+    li.appendChild(info); li.appendChild(actions);
+    listEl.appendChild(li);
+  });
+}
+
+function openTrashModal() {
+  purgeExpiredTrash();
+  renderTrashList();
+  updateTrashBadge();
+  trashModal.classList.remove('hidden');
+}
+function closeTrashModal() { trashModal.classList.add('hidden'); }
+
+document.getElementById('btn-open-trash')?.addEventListener('click', openTrashModal);
+document.getElementById('btn-close-trash')?.addEventListener('click', closeTrashModal);
+trashModal?.querySelector('.modal-backdrop')?.addEventListener('click', closeTrashModal);
+
 const syncEnabledEl = document.getElementById('sync-enabled');
 const calendarAutoImportEl = document.getElementById('calendar-auto-import');
 const syncSignedInBlock = document.getElementById('sync-signed-in-block');
@@ -2174,7 +2320,20 @@ function scheduleCloudSync(immediate = false) {
 
 async function applySyncResult(result) {
   if (result?.appState) {
+    // 휴지통은 로컬 전용 — merge 결과엔 없으므로 병합 전 로컬 값을 보존한다.
+    const localTrash = appState.trashedMemos || {};
     appState = migrateData(result.appState);
+    appState.trashedMemos = localTrash;
+    // 부활 가드: 로컬 휴지통에 있는 메모가 원격에서 다시 활성으로 딸려오면 제거
+    Object.keys(localTrash).forEach((id) => {
+      if (appState.memos[id]) {
+        delete appState.memos[id];
+        appState.memoOrder = appState.memoOrder.filter((x) => x !== id);
+      }
+    });
+    if (!appState.memos[appState.activeMemoId]) {
+      appState.activeMemoId = appState.memoOrder[0];
+    }
     currentMemo = appState.memos[appState.activeMemoId];
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
     refreshActiveUI();
@@ -2572,6 +2731,8 @@ function setupFindBar() {
 setupFindBar();
 
 async function boot() {
+  purgeExpiredTrash();
+  updateTrashBadge();
   await checkDayRollover();
   await initSyncSettings();
 

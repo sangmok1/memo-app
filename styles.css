@@ -1343,3 +1343,50 @@ body {
   border-color: hsl(var(--hue, 54), 70%, 40%);
   color: white;
 }
+
+/* ===== 휴지통(Trash) ===== */
+.trash-count-badge {
+  font-size: 11px;
+  color: #d9534f;
+  font-weight: 600;
+}
+.trash-hint {
+  font-size: 12px;
+  color: #888;
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+.trash-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.trash-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 8px;
+  background: rgba(0,0,0,0.02);
+}
+.trash-item-info { min-width: 0; flex: 1; }
+.trash-item-label {
+  font-size: 13px;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.trash-item-meta { font-size: 11px; color: #999; margin-top: 2px; }
+.trash-item-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.trash-purge-btn { color: #d9534f; }
+.trash-empty { text-align: center; color: #999; font-size: 13px; padding: 20px 0; }
+@media (prefers-color-scheme: dark) {
+  .trash-item { border-color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); }
+  .trash-item-label { color: #ddd; }
+}

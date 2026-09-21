@@ -591,10 +591,12 @@ async function pushBundleAuth(idToken, bundle, options = {}) {
 }
 
 function buildSyncBundle(appState, archives) {
+  // 휴지통(trashedMemos)은 로컬 전용 — 클라우드로 올리지 않는다.
+  const { trashedMemos, ...appStateForCloud } = appState || {};
   return {
     version: 2,
     exportedAt: new Date().toISOString(),
-    appState,
+    appState: appStateForCloud,
     archives,
   };
 }

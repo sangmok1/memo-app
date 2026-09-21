@@ -52,6 +52,8 @@
         <button class="btn-archive-link" id="btn-open-archive">폴더 열기</button>
         <span class="settings-archive-sep">·</span>
         <button class="btn-archive-link" id="btn-archive-report">기간별 보기</button>
+        <span class="settings-archive-sep">·</span>
+        <button class="btn-archive-link" id="btn-open-trash">휴지통<span id="trash-count-badge" class="trash-count-badge hidden"></span></button>
       </div>
       <div class="settings-sync-block" id="sync-settings-block">
         <div class="sync-toggle-row">
@@ -207,6 +209,23 @@
       <div class="modal-actions">
         <button class="btn-danger" id="btn-confirm-delete">삭제</button>
         <button class="btn-close-modal" id="btn-cancel-delete">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="trash-modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-content-form">
+      <div class="modal-form-header">
+        <h3>휴지통</h3>
+        <p class="trash-hint">삭제한 메모는 3일간 보관되며 이후 자동으로 비워집니다. (휴지통은 이 기기에만 보관)</p>
+      </div>
+      <div class="modal-form-scroll">
+        <ul class="trash-list" id="trash-list"></ul>
+        <p class="trash-empty hidden" id="trash-empty">휴지통이 비어 있습니다.</p>
+      </div>
+      <div class="modal-actions modal-form-footer">
+        <button class="btn-close-modal" id="btn-close-trash">닫기</button>
       </div>
     </div>
   </div>
